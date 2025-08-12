@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+  <dict>
+    <key>AppPrivacy</key>
+    <dict>
+      <key>Privacy Accessed API Types</key>
+      <array>
+        <dict>
+          <key>Privacy Accessed API Type</key>
+          <string>UserDefaults (Settings)</string>
+          <key>Privacy Accessed API Reasons</key>
+          <string>C617.1 – App preferences and settings</string>
+        </dict>
+        <dict>
+          <key>Privacy Accessed API Type</key>
+          <string>Contacts</string>
+          <key>Privacy Accessed API Reasons</key>
+          <string>C645.1 – To help users add people to tables from their contacts</string>
+        </dict>
+        <dict>
+          <key>Privacy Accessed API Type</key>
+          <string>Photo Library</string>
+          <key>Privacy Accessed API Reasons</key>
+          <string>C617.1 – To allow users to add profile images to people at their tables</string>
+        </dict>
+      </array>
+    </dict>
+  </dict>
+</plist> 

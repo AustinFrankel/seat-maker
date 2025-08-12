@@ -1,0 +1,80 @@
+name: TableMakerPublish
+options:
+  minimumXcodeGenVersion: 2.39.0
+  indentWidth: 2
+  tabWidth: 2
+  bundleIdPrefix: com.austinfrankel
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    TARGETED_DEVICE_FAMILY: 1,2
+    SUPPORTED_PLATFORMS: iphonesimulator iphoneos
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "86THBB6R66"
+    CODE_SIGN_IDENTITY: "Apple Development"
+    PRODUCT_NAME: $(TARGET_NAME)
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0
+
+targets:
+  TableMakerPublish:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: TableMakerPublish
+        excludes:
+          - build.log
+    resources:
+      - TableMakerPublish/Assets.xcassets
+      - TableMakerPublish/PrivacyInfo.xcprivacy
+      - TableMakerPublish/app-ads.txt
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.austinfrankel.TableMakerPublish
+        INFOPLIST_FILE: TableMakerPublish/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGNING_REQUIRED: YES
+
+  TableMakerPublishTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - TableMakerPublishTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.austinfrankel.TableMakerPublishTests
+    dependencies:
+      - target: TableMakerPublish
+
+  TableMakerPublishUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - TableMakerPublishUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.austinfrankel.TableMakerPublishUITests
+    dependencies:
+      - target: TableMakerPublish
+
+schemes:
+  TableMakerPublish:
+    build:
+      targets:
+        TableMakerPublish: [run, test]
+    test:
+      targets:
+        - name: TableMakerPublishTests
+        - name: TableMakerPublishUITests
+    run:
+      config: Debug
+
+
