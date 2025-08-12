@@ -524,10 +524,7 @@ struct ImportFromListView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if step == 3 {
-                        Button("Create Tables") { createTables() }
-                            .disabled(previewAssignments.isEmpty)
-                    } else if step < 3 {
+                    if step < 3 {
                         Button("Next") { continueTapped() }
                             .disabled(step == 1 ? !(settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty) : !canContinue())
                     }
@@ -566,9 +563,9 @@ struct ImportFromListView: View {
                             .frame(width: 80)
                             .onChange(of: peoplePerTableText) { t in
                                 let v = Int(t) ?? settings.peoplePerTable
-                                settings.peoplePerTable = min(max(2, v), 30)
+                                settings.peoplePerTable = min(max(2, v), 20)
                             }
-                        Stepper(value: $settings.peoplePerTable, in: 2...30) { EmptyView() }
+                        Stepper(value: $settings.peoplePerTable, in: 2...20) { EmptyView() }
                             .labelsHidden()
                             .onChange(of: settings.peoplePerTable) { v in peoplePerTableText = String(v) }
                     }
@@ -756,7 +753,7 @@ struct ImportFromListView: View {
     }
 
     private var step4Preview: some View {
-        VStack(spacing: 12) {
+            VStack(spacing: 0) {
             GroupBox(label: Text("Seating logic options")) {
                 VStack(alignment: .leading, spacing: 12) {
                     Picker("Assignment mode", selection: $settings.assignmentMode) { ForEach(ImportAssignmentMode.allCases) { m in Text(m.rawValue).tag(m) } }.pickerStyle(SegmentedPickerStyle())
@@ -764,30 +761,28 @@ struct ImportFromListView: View {
                     Toggle("Respect VIP (one per table if possible)", isOn: .constant(true)).disabled(true)
                 }
             }
-            if computingPreview { ProgressView("Building preview...").padding() }
-            else if previewAssignments.isEmpty { Button("Build Preview") { recomputePreview() } }
-            else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(previewAssignments.indices, id: \.self) { idx in
-                            VStack(alignment: .leading, spacing: 8) {
-                                let shape = shapeForTable(index: idx)
-                                Text("Table \(idx + 1) – \(shape.rawValue.capitalized)").font(.headline)
-                                ForEach(previewAssignments[idx]) { person in
-                                    HStack {
-                                        Text(person.name)
-                                        if person.vip { Text("VIP").font(.caption).padding(4).background(Color.yellow.opacity(0.3)).cornerRadius(6) }
-                                        if let g = person.group, !g.isEmpty { Text(g).font(.caption).padding(4).background(Color.blue.opacity(0.15)).cornerRadius(6) }
-                                    }
+            if computingPreview { ProgressView("Building preview...").padding(.vertical, 8) }
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(previewAssignments.indices, id: \.self) { idx in
+                        VStack(alignment: .leading, spacing: 8) {
+                            let shape = shapeForTable(index: idx)
+                            Text("Table \(idx + 1) – \(shape.rawValue.capitalized)").font(.headline)
+                            ForEach(previewAssignments[idx]) { person in
+                                HStack {
+                                    Text(person.name)
+                                    if person.vip { Text("VIP").font(.caption).padding(4).background(Color.yellow.opacity(0.3)).cornerRadius(6) }
+                                    if let g = person.group, !g.isEmpty { Text(g).font(.caption).padding(4).background(Color.blue.opacity(0.15)).cornerRadius(6) }
                                 }
                             }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
                         }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
                     }
-                    .padding(.horizontal)
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 12)
             }
             HStack {
                 Button("Reshuffle") { recomputePreview() }
@@ -797,9 +792,9 @@ struct ImportFromListView: View {
                     .disabled(previewAssignments.isEmpty)
             }
             .padding(.horizontal)
-            Spacer(minLength: 8)
+            .padding(.bottom, 6)
         }
-        .padding(.top, 8)
+        .padding(.top, 0)
         .onAppear { if previewAssignments.isEmpty { recomputePreview() } }
         .alert("Success", isPresented: $showSuccess) {
             Button("OK") { isPresented = false }
@@ -1032,13 +1027,26 @@ struct ImportFromListView: View {
     }
 
     private func buildAssignments(people: [ImportedPersonData], settings: ImportSeatingSettings) -> [[ImportedPersonData]] {
-        let perTable = max(2, settings.peoplePerTable)
+        // Clamp per-table to 20 max
+        let perTableInput = max(2, min(20, settings.peoplePerTable))
         let total = people.count
-        // Minimum tables such that people per table <= 20
-        let minTablesForCapacity = max(1, Int(ceil(Double(total) / Double(min(perTable, 20)))))
-        let autoTables = Int(ceil(Double(total) / Double(perTable)))
-        let computedTables = max(minTablesForCapacity, autoTables)
-        let tableCount: Int = settings.manualTableCountEnabled ? max(minTablesForCapacity, settings.manualTableCount) : computedTables
+        // Manual count path: ensure enough tables to keep <=20 per table
+        if settings.manualTableCountEnabled {
+            let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
+            let manualCount = max(minTablesForCapacity, max(1, settings.manualTableCount))
+            return distribute(people: people, into: manualCount, perTableLimit: 20, targetPerTable: perTableInput, settings: settings)
+        }
+        // Auto: aim for 4–8 people per table
+        let targetPerTable = max(4, min(8, perTableInput))
+        let autoTables = max(1, Int(ceil(Double(total) / Double(targetPerTable))))
+        let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
+        let tableCount = max(minTablesForCapacity, autoTables)
+        return distribute(people: people, into: tableCount, perTableLimit: 20, targetPerTable: targetPerTable, settings: settings)
+    }
+
+    // Helper to distribute people based on constraints
+    private func distribute(people: [ImportedPersonData], into tableCount: Int, perTableLimit: Int, targetPerTable: Int, settings: ImportSeatingSettings) -> [[ImportedPersonData]] {
+        let perTable = min(perTableLimit, max(2, targetPerTable))
         if tableCount == 0 { return [] }
         var tables: [[ImportedPersonData]] = Array(repeating: [], count: tableCount)
         let vips = people.filter { $0.vip }
