@@ -1813,7 +1813,7 @@ struct ContentView: View {
                     .dynamicTypeSize(.xSmall ... .accessibility5)
                     .minimumScaleFactor(0.7)
                     .foregroundColor(.blue)
-                    .padding(.horizontal, 22.5)
+                    .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .padding(.top, 5)
                     .background(
@@ -1821,7 +1821,7 @@ struct ContentView: View {
                             .fill(Color.blue.opacity(0.12))
                     )
                 }
-                .padding(.horizontal, -1.5) // widen by ~3px beyond container
+                .padding(.horizontal, -4) // widen slightly more
                 // Removed dropdown; handled directly in button action above
                 // Import from Contacts button (bottom)
                 Button(action: {
@@ -6856,6 +6856,8 @@ struct TableManagerView: View {
     @State private var tempName: String = ""
     @State private var showToast: String? = nil
     @State private var showingReorder: Bool = false
+    @State private var pendingDeleteIds: [Int] = []
+    @State private var showDeleteConfirm: Bool = false
 
     private var allTablesSorted: [(id: Int, table: SeatingArrangement)] {
         let items = viewModel.tableCollection.tables.map { ($0.key, $0.value) }
@@ -6933,8 +6935,8 @@ struct TableManagerView: View {
                                         if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
                                     },
                                     onRename: { startRename(id: id, current: arrangement.title) },
-                                    onDuplicate: { _ = viewModel.duplicateTable(id: id) },
-                                    onDelete: { viewModel.deleteTables(ids: [id]) },
+                                     onDuplicate: { _ = viewModel.duplicateTable(id: id) },
+                                     onDelete: { requestDeleteFor(id) },
                                     viewModel: viewModel
                                 )
                             }
@@ -6946,16 +6948,13 @@ struct TableManagerView: View {
                 }
 
                 if isSelecting && !selectedIds.isEmpty {
-                    HStack(spacing: 12) {
-                        Button(role: .destructive) { viewModel.deleteTables(ids: Array(selectedIds)); selectedIds.removeAll() } label: {
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive) { requestDeleteSelected() } label: {
                             Label("Delete", systemImage: "trash")
                         }
                         .buttonStyle(.bordered)
-
-                        Button { bulkDuplicateSelected() } label: {
-                            Label("Duplicate", systemImage: "plus.square.on.square")
-                        }
-                        .buttonStyle(.bordered)
+                        Spacer()
                     }
                     .padding()
                 }
@@ -6974,7 +6973,7 @@ struct TableManagerView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         Button(action: { showingReorder = true }) {
-                            Label("Reorder", systemImage: "arrow.up.arrow.down.square")
+                            Label("Reorder", systemImage: "arrow.up.arrow.down.circle")
                         }
                         Button(action: { createNewTableAndOpen() }) {
                             Label("New Table", systemImage: "plus")
@@ -6989,6 +6988,16 @@ struct TableManagerView: View {
                 TextField("Table name", text: $tempName).autocapitalization(.words)
                 Button("Cancel", role: .cancel) { showRenamePrompt = nil }
                 Button("Save") { commitRename() }
+            }
+            .alert("Delete Table?", isPresented: $showDeleteConfirm) {
+                Button("Delete", role: .destructive) {
+                    viewModel.deleteTables(ids: pendingDeleteIds)
+                    for id in pendingDeleteIds { selectedIds.remove(id) }
+                    pendingDeleteIds.removeAll()
+                }
+                Button("Cancel", role: .cancel) { pendingDeleteIds.removeAll() }
+            } message: {
+                Text(pendingDeleteIds.count > 1 ? "One or more selected tables have seated people. This will remove them from those tables." : "This table has seated people. Delete anyway?")
             }
             .overlay(alignment: .top) {
                 if let toast = showToast {
@@ -7036,6 +7045,29 @@ struct TableManagerView: View {
         selectedIds.removeAll()
     }
 
+    private func requestDeleteFor(_ id: Int) {
+        let hasSeated = !(viewModel.tableCollection.tables[id]?.people.isEmpty ?? true)
+        if hasSeated {
+            pendingDeleteIds = [id]
+            showDeleteConfirm = true
+        } else {
+            viewModel.deleteTables(ids: [id])
+        }
+    }
+
+    private func requestDeleteSelected() {
+        let ids = Array(selectedIds)
+        guard !ids.isEmpty else { return }
+        let requiresConfirm = ids.contains { !(viewModel.tableCollection.tables[$0]?.people.isEmpty ?? true) }
+        if requiresConfirm {
+            pendingDeleteIds = ids
+            showDeleteConfirm = true
+        } else {
+            viewModel.deleteTables(ids: ids)
+            selectedIds.removeAll()
+        }
+    }
+
     private func showTransientToast(_ message: String) {
         withAnimation { showToast = message }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
@@ -7066,8 +7098,8 @@ private struct TableCard: View {
                 },
                 onPersonTap: { _ in }
             )
-            .scaleEffect(0.82) // slightly smaller to reduce visual squeeze
-            .frame(height: 130)
+            .scaleEffect(0.72)
+            .frame(height: 110)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
             // Move rename (draw) control to far top-left
             .overlay(alignment: .topLeading) {
@@ -7091,7 +7123,8 @@ private struct TableCard: View {
                 .padding(6)
             }
 
-            // Push labels down a bit to give breathing room while keeping table position
+            // Push labels to the bottom of the card area
+            Spacer()
             Text(arrangement.title.isEmpty ? "Table \(id + 1)" : arrangement.title)
                 .font(.headline)
                 .lineLimit(1)
@@ -7108,6 +7141,7 @@ private struct TableCard: View {
                     .background(Capsule().fill(Color(.systemGray5)))
             }
         }
+        .frame(minHeight: 220)
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -7140,8 +7174,7 @@ struct ReorderTablesView: View {
             List {
                 ForEach(order, id: \.self) { id in
                     HStack {
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundColor(.gray)
+                        // Remove leading drag handle icon for a cleaner row
                         Text(viewModel.tableCollection.tables[id]?.title.isEmpty == false ? (viewModel.tableCollection.tables[id]?.title ?? "Table") : "Table \(id + 1)")
                         Spacer()
                         Text("\(viewModel.tableCollection.tables[id]?.people.count ?? 0) seated")
@@ -7163,7 +7196,6 @@ struct ReorderTablesView: View {
                 leading: Button("Cancel") { isPresented = false },
                 trailing:
                     HStack(spacing: 12) {
-                        EditButton()
                         Button("Done") {
                             viewModel.reorderTables(newOrder: order)
                             isPresented = false
@@ -7173,6 +7205,7 @@ struct ReorderTablesView: View {
             )
             .onAppear {
                 order = viewModel.tableCollection.tables.keys.sorted()
+                editMode?.wrappedValue = .active
             }
         }
     }

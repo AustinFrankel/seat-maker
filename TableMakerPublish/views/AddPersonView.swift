@@ -226,13 +226,13 @@ struct AddPersonView: View {
                         }
                         .font(.title3)
                         .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 22.5) // base width
+                        .padding(.horizontal, 28) // slightly wider
                         .padding(.vertical, 14) // slightly shorter height
                         .padding(.top, 5) // move down ~5px
                         .background(Color.blue.opacity(0.12))
                         .cornerRadius(16)
                     }
-                    .padding(.horizontal, -1.5) // expand overall width by ~3px beyond container
+                    .padding(.horizontal, -4) // expand overall width a touch more
                     // Removed dropdown entirely; handled directly above
 
                     // Import from contacts (bottom)
