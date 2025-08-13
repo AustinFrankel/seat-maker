@@ -2384,6 +2384,21 @@ struct ContentView: View {
                     // Permissions Section
                     Section(header: Text("Permissions")) {
                         Text("You can manage Contacts and Photos permissions in the iOS Settings app under Seat Maker. If you deny access, you can still use the app, but some features may be limited.")
+                        #if canImport(FBAudienceNetwork)
+                        Button(action: {
+                            // Simple test to force load + present an interstitial
+                            InterstitialAdManager.shared.load()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                InterstitialAdManager.shared.showIfReady()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "bolt.fill").foregroundColor(.blue)
+                                Text("Test Interstitial Ad")
+                            }
+                        }
+                        .accessibilityLabel("Test Interstitial Ad")
+                        #endif
                     }
 
                     // After Permissions section, before Account & Data section
