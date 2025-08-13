@@ -94,8 +94,13 @@ final class InterstitialAdManager: NSObject, FBInterstitialAdDelegate {
            ad.responds(to: #selector(FBInterstitialAdBidLoading.loadAd(withBidPayload:))) {
             _ = ad.perform(#selector(FBInterstitialAdBidLoading.loadAd(withBidPayload:)), with: payload)
         } else {
-            // Fall back to legacy API dynamically to avoid deprecation diagnostics
-            _ = ad.perform(#selector(FBInterstitialAd.load))
+            // Legacy Objective‑C selector – call dynamically to tolerate SDK differences
+            if ad.responds(to: NSSelectorFromString("loadAd")) {
+                _ = ad.perform(NSSelectorFromString("loadAd"))
+            } else {
+                // As a last resort for older headers that bridged to Swift as `load()`
+                _ = ad.perform(NSSelectorFromString("load"))
+            }
         }
         interstitialAd = ad
     }
