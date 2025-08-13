@@ -257,6 +257,72 @@ class SeatingViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Phone numbers lookup for group text
+    /// Best-effort lookup of phone numbers for the provided people by matching their names in the user's Contacts.
+    /// Returns a unique list of sanitized phone numbers suitable for use with the Messages composer.
+    func fetchPhoneNumbers(for people: [Person]) async -> [String] {
+        // Request access first if needed
+        let store = CNContactStore()
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        if status == .notDetermined {
+            do { _ = try await store.requestAccess(for: .contacts) } catch { return [] }
+        } else if status != .authorized {
+            return []
+        }
+
+        // Helper to keep only digits and leading '+'
+        func sanitizePhone(_ raw: String) -> String {
+            let allowed = Set("+0123456789")
+            var result = ""
+            for ch in raw { if allowed.contains(ch) { result.append(ch) } }
+            // Ensure only a single leading '+' is kept
+            if let firstPlus = result.firstIndex(of: "+") {
+                if firstPlus != result.startIndex { result.remove(at: firstPlus) }
+                // Remove any additional '+'
+                result = result.enumerated().filter { $0.element != "+" || $0.offset == 0 }.map { String($0.element) }.joined()
+            }
+            return result
+        }
+
+        var numbers: Set<String> = []
+        let keysToFetch: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor
+        ]
+
+        // Match by name using Contacts predicate for robustness
+        for person in people {
+            let nameQuery = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !nameQuery.isEmpty else { continue }
+            let predicate = CNContact.predicateForContacts(matchingName: nameQuery)
+            do {
+                let matches = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+                // Prefer exact display name match when possible, otherwise take the first match
+                let chosen: CNContact? = {
+                    if let exact = matches.first(where: { ("")
+                        .appending($0.givenName).appending(" ").appending($0.familyName)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .localizedCaseInsensitiveCompare(nameQuery) == .orderedSame }) {
+                        return exact
+                    }
+                    return matches.first
+                }()
+                if let contact = chosen {
+                    if let firstNumber = contact.phoneNumbers.first?.value.stringValue, !firstNumber.isEmpty {
+                        let sanitized = sanitizePhone(firstNumber)
+                        if !sanitized.isEmpty { numbers.insert(sanitized) }
+                    }
+                }
+            } catch {
+                // Skip this person on error and continue
+                continue
+            }
+        }
+
+        return Array(numbers)
+    }
+    
     func addPerson(name: String) {
         // Validate input
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -987,9 +1053,49 @@ class SeatingViewModel: ObservableObject {
             summary += "\n"
         }
         
-        // Add app info
-        summary += "Created with Seat Maker App"
+        // Add app info and App Store link
+        summary += "Created with Seat Maker App\n\n"
+        summary += "📱 Download Seat Maker: https://apps.apple.com/us/app/seat-maker/id6748284141"
         
+        return summary
+    }
+
+    /// Export a single table's details in the same clean format as exportAllTables
+    /// - Parameter table: The `SeatingArrangement` to export
+    /// - Returns: A formatted string suitable for sharing in Messages or any share target
+    func exportSingleTable(_ table: SeatingArrangement) -> String {
+        // Use event title if available
+        let eventTitle = table.eventTitle ?? currentArrangement.eventTitle ?? ""
+        let (formattedTitle, eventEmoji) = UIHelpers.formatEventTitle(eventTitle)
+
+        var summary = eventTitle.isEmpty ? "" : "Event: \(eventEmoji) \(formattedTitle)\n"
+
+        // Totals (for a single table)
+        let totalPeople = table.people.count
+        summary += "People: \(totalPeople)\n"
+        summary += "Tables: 1\n\n"
+
+        // Table header (respect custom table name when present)
+        let tableName = table.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Table 1" : table.title
+        let peopleText = totalPeople == 1 ? "1 person" : "\(totalPeople) people"
+        summary += "▸ \(tableName) (\(peopleText))\n"
+
+        // Sort by seat number for consistent display
+        let sortedPeople = table.people.sorted {
+            let seatA = table.seatAssignments[$0.id] ?? 0
+            let seatB = table.seatAssignments[$1.id] ?? 0
+            return seatA < seatB
+        }
+
+        for person in sortedPeople {
+            if let seatNumber = table.seatAssignments[person.id] {
+                summary += "  \(seatNumber + 1). \(person.name)\(person.isLocked ? " 🔒" : "")\n"
+            }
+        }
+
+        summary += "\nCreated with Seat Maker App\n\n"
+        summary += "📱 Download Seat Maker: https://apps.apple.com/us/app/seat-maker/id6748284141"
+
         return summary
     }
     

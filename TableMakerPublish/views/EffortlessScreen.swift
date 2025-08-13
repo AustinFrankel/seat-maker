@@ -121,6 +121,9 @@ struct EffortlessScreen: View {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         showPopup = true
                         onContinue()
+                        #if canImport(FBAudienceNetwork)
+                        InterstitialAdManager.shared.showIfReady()
+                        #endif
                     }
                 }) {
                     HStack(spacing: 12) {

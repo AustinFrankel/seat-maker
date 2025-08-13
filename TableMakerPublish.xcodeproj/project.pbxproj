@@ -12,6 +12,7 @@
 		0D6F333462F01A1F39E61CB9 /* SeatingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A620B1C93D98FF837AF8BBE /* SeatingViewModel.swift */; };
 		0F73DE3E380F53E2B4FBFA84 /* FAQView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C6C7D9A48ECFE86CF164EA /* FAQView.swift */; };
 		1404D7395B8DBD60828B9F59 /* ContactsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FC102067C5B9E022D6D10D /* ContactsManager.swift */; };
+		1AAA11112222333344445555 /* GuestManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAA11112222333344445554 /* GuestManagerView.swift */; };
 		42B30BC151DD545753F6E8DA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C74C9AEB03D73AF843E2C4E /* ContentView.swift */; };
 		4698189EA2B1321DED143CC2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */; };
 		46ED4874E7C174EA11507DDF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EDA5DD3EE847F5FBE849BA1C /* PrivacyInfo.xcprivacy */; };
@@ -26,16 +27,30 @@
 		892C998C4AA4E988517A6FBF /* AboutMeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51035CB617B82D2E79D7B39A /* AboutMeView.swift */; };
 		8B9C0D1E2F30415263748596 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9B1C2D3E4F5061728394A5 /* NotificationService.swift */; };
 		8C16F88D360243816638B31A /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C9C92152FAA7200C4C0222 /* Components.swift */; };
+		8D34B3F3DE1902161C32D983 /* Pods_TableMakerPublish.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2087C4DB752E52FD2110C01E /* Pods_TableMakerPublish.framework */; };
 		A57CF09E8EF870A8D3D826EB /* SharedTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD7449B7341C2A0269C14348 /* SharedTable.swift */; };
 		A6DF2E606C5F2DDE08D07C2B /* TableMakerPublishUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EB6CD28857739010F9D04F /* TableMakerPublishUITestsLaunchTests.swift */; };
+		AA11BB2200CCDD3311223344 /* PolarPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223340 /* PolarPosition.swift */; };
+		AA11BB2200CCDD3311223345 /* BlueprintGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223341 /* BlueprintGrid.swift */; };
+		AA11BB2200CCDD3311223346 /* LaunchAnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223342 /* LaunchAnimationController.swift */; };
+		AA11BB2200CCDD3311223347 /* LaunchAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223343 /* LaunchAnimationView.swift */; };
+		AA11BB2200CCDD3311223348 /* LottieLaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223349 /* LottieLaunchView.swift */; };
+		AA11BB2200CCDD3311223350 /* LaunchIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223351 /* LaunchIntegration.swift */; };
+		AA11BB2200CCDD3311223352 /* LaunchAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223353 /* LaunchAnimationTests.swift */; };
 		B72E95BD7B07AEA3F4E35B29 /* EffortlessScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE3776672A744FE795A2582 /* EffortlessScreen.swift */; };
 		C436D1B51B1B30C8D5095AAF /* TableMakerPublishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609D897F688F23EA187824C2 /* TableMakerPublishTests.swift */; };
 		D9F02FBFDE017C562D679E64 /* PersonNameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD08D54AA775AA087D34069 /* PersonNameView.swift */; };
 		DF0E8E2A0E0007F2CC5DE93A /* SeatingArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E92BDE6E153308F0A7BDA0 /* SeatingArrangement.swift */; };
 		E64774DDD02FD2C5FC337A43 /* HelpTutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85673682980D8BF82861C0F7 /* HelpTutorialView.swift */; };
 		E78AB20B2823A0D6430545D0 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A511ED822BCB17CF254BBA /* ImageCache.swift */; };
+		F0A1B2C30100000100000001 /* Base64URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000001 /* Base64URL.swift */; };
+		F0A1B2C30100000100000002 /* LZFSECompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000002 /* LZFSECompression.swift */; };
+		F0A1B2C30100000100000003 /* ShareLinkBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000003 /* ShareLinkBuilder.swift */; };
+		F0A1B2C30100000100000004 /* ShareLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000004 /* ShareLinkRouter.swift */; };
+		F0A1B2C30100000100000005 /* SnapshotImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */; };
+		F0A1B2C30100000100000006 /* LiveShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000006 /* LiveShareService.swift */; };
+		F0A1B2C30100000100000007 /* ShareLinkRouterTestShim.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */; };
 		F26EFD67C3E39413D81B66CF /* TableMakerPublishApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */; };
-        1AAA11112222333344445555 /* GuestManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAA11112222333344445554 /* GuestManagerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +77,8 @@
 		1486B32E4BDA11C6FC1E7968 /* AddPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPersonView.swift; sourceTree = "<group>"; };
 		17EB6CD28857739010F9D04F /* TableMakerPublishUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableMakerPublishUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		198B013B23428455A5EDCBC4 /* TableMakerPublishTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TableMakerPublishTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1AAA11112222333344445554 /* GuestManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestManagerView.swift; sourceTree = "<group>"; };
+		2087C4DB752E52FD2110C01E /* Pods_TableMakerPublish.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TableMakerPublish.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableSharingService.swift; sourceTree = "<group>"; };
 		28968239EC8A43123184051C /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		2A620B1C93D98FF837AF8BBE /* SeatingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeatingViewModel.swift; sourceTree = "<group>"; };
@@ -77,7 +94,15 @@
 		A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A6A739FFD3672F271B8B0A6F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableMakerPublishApp.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223340 /* PolarPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolarPosition.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223341 /* BlueprintGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueprintGrid.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223342 /* LaunchAnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationController.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223343 /* LaunchAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationView.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223349 /* LottieLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieLaunchView.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223351 /* LaunchIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntegration.swift; sourceTree = "<group>"; };
+		AA11BB2200CCDD3311223353 /* LaunchAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationTests.swift; sourceTree = "<group>"; };
 		AD7449B7341C2A0269C14348 /* SharedTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTable.swift; sourceTree = "<group>"; };
+		B3A1C2D4E5F6071890ABCDEF /* TableMakerPublish.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TableMakerPublish.entitlements; sourceTree = "<group>"; };
 		B9C9C92152FAA7200C4C0222 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		BAE3776672A744FE795A2582 /* EffortlessScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffortlessScreen.swift; sourceTree = "<group>"; };
 		D491BD389ACA4D7516EA7B4B /* TableMakerPublishUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TableMakerPublishUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,16 +111,46 @@
 		DBD08D54AA775AA087D34069 /* PersonNameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonNameView.swift; sourceTree = "<group>"; };
 		DD57228B172EBC555CFB72E5 /* ContactsPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsPickerView.swift; sourceTree = "<group>"; };
 		E8C6C7D9A48ECFE86CF164EA /* FAQView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FAQView.swift; sourceTree = "<group>"; };
+		ECEDD58E3DE2749A3DF8952E /* Pods-TableMakerPublish.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TableMakerPublish.debug.xcconfig"; path = "Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish.debug.xcconfig"; sourceTree = "<group>"; };
 		EDA5DD3EE847F5FBE849BA1C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		EFC208260ECFAD821F05DDCA /* Pods-TableMakerPublish.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TableMakerPublish.release.xcconfig"; path = "Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish.release.xcconfig"; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000001 /* Base64URL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base64URL.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000002 /* LZFSECompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LZFSECompression.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000003 /* ShareLinkBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkBuilder.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000004 /* ShareLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouter.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000006 /* LiveShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareService.swift; sourceTree = "<group>"; };
+		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
 		FDB94BBBD30680D0C09EB9ED /* app-ads.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "app-ads.txt"; sourceTree = "<group>"; };
-        1AAA11112222333344445554 /* GuestManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestManagerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		0DB1137CFAF7C706C1560AC3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D34B3F3DE1902161C32D983 /* Pods_TableMakerPublish.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
+		03857A9C9C5581C71096CB15 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				ECEDD58E3DE2749A3DF8952E /* Pods-TableMakerPublish.debug.xcconfig */,
+				EFC208260ECFAD821F05DDCA /* Pods-TableMakerPublish.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		2C50EB7601640602E5E37613 /* TableMakerPublishTests */ = {
 			isa = PBXGroup;
 			children = (
 				609D897F688F23EA187824C2 /* TableMakerPublishTests.swift */,
+				AA11BB2200CCDD3311223353 /* LaunchAnimationTests.swift */,
 			);
 			path = TableMakerPublishTests;
 			sourceTree = "<group>";
@@ -106,8 +161,10 @@
 				FDB94BBBD30680D0C09EB9ED /* app-ads.txt */,
 				A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */,
 				A6A739FFD3672F271B8B0A6F /* Info.plist */,
+				B3A1C2D4E5F6071890ABCDEF /* TableMakerPublish.entitlements */,
 				EDA5DD3EE847F5FBE849BA1C /* PrivacyInfo.xcprivacy */,
 				A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */,
+				AA11BB2200CCDD3311223339 /* Animation */,
 				D7891831C236C7BB81D8BB99 /* Models */,
 				B7D8F2990A3BDA706705BC92 /* Services */,
 				A64D95CF313AA59C590079A8 /* ViewModel */,
@@ -132,6 +189,8 @@
 				2C50EB7601640602E5E37613 /* TableMakerPublishTests */,
 				452F7D3990E2AE2AF57BBCA3 /* TableMakerPublishUITests */,
 				84C63A094C5F66323CF45CDB /* Products */,
+				03857A9C9C5581C71096CB15 /* Pods */,
+				84D25349563CF743F6E07591 /* Frameworks */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -167,6 +226,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		84D25349563CF743F6E07591 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2087C4DB752E52FD2110C01E /* Pods_TableMakerPublish.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		A64D95CF313AA59C590079A8 /* ViewModel */ = {
 			isa = PBXGroup;
 			children = (
@@ -175,11 +242,31 @@
 			path = ViewModel;
 			sourceTree = "<group>";
 		};
+		AA11BB2200CCDD3311223339 /* Animation */ = {
+			isa = PBXGroup;
+			children = (
+				AA11BB2200CCDD3311223340 /* PolarPosition.swift */,
+				AA11BB2200CCDD3311223341 /* BlueprintGrid.swift */,
+				AA11BB2200CCDD3311223342 /* LaunchAnimationController.swift */,
+				AA11BB2200CCDD3311223343 /* LaunchAnimationView.swift */,
+				AA11BB2200CCDD3311223349 /* LottieLaunchView.swift */,
+				AA11BB2200CCDD3311223351 /* LaunchIntegration.swift */,
+			);
+			path = Animation;
+			sourceTree = "<group>";
+		};
 		B7D8F2990A3BDA706705BC92 /* Services */ = {
 			isa = PBXGroup;
 			children = (
 				20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */,
 				7A9B1C2D3E4F5061728394A5 /* NotificationService.swift */,
+				F0A1B2C3FEF1000100000001 /* Base64URL.swift */,
+				F0A1B2C3FEF1000100000002 /* LZFSECompression.swift */,
+				F0A1B2C3FEF1000100000003 /* ShareLinkBuilder.swift */,
+				F0A1B2C3FEF1000100000004 /* ShareLinkRouter.swift */,
+				F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */,
+				F0A1B2C3FEF1000100000006 /* LiveShareService.swift */,
+				F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -212,8 +299,6 @@
 				1948B3A07413D2F9C0CCB6E3 /* PBXTargetDependency */,
 			);
 			name = TableMakerPublishUITests;
-			packageProductDependencies = (
-			);
 			productName = TableMakerPublishUITests;
 			productReference = D491BD389ACA4D7516EA7B4B /* TableMakerPublishUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -222,16 +307,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2D5858F81E46F60519281D23 /* Build configuration list for PBXNativeTarget "TableMakerPublish" */;
 			buildPhases = (
+				A395DE275E09FB3CB233BA87 /* [CP] Check Pods Manifest.lock */,
 				734460A2D3A20D8E04251406 /* Sources */,
 				84991E93F646FDB25F11B492 /* Resources */,
+				0DB1137CFAF7C706C1560AC3 /* Frameworks */,
+				BE02169A85E5BC058F226866 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = TableMakerPublish;
-			packageProductDependencies = (
-			);
 			productName = TableMakerPublish;
 			productReference = 48DA812AB07FD90FD5B24FAB /* TableMakerPublish.app */;
 			productType = "com.apple.product-type.application";
@@ -248,8 +334,6 @@
 				4E3994EAC19760AB51A8D357 /* PBXTargetDependency */,
 			);
 			name = TableMakerPublishTests;
-			packageProductDependencies = (
-			);
 			productName = TableMakerPublishTests;
 			productReference = 198B013B23428455A5EDCBC4 /* TableMakerPublishTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -287,6 +371,7 @@
 			);
 			mainGroup = 5EB6F4922B1CCE486FC2EA7D;
 			minimizedProjectReferenceProxies = 1;
+			productRefGroup = 84C63A094C5F66323CF45CDB /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -310,6 +395,48 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A395DE275E09FB3CB233BA87 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TableMakerPublish-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		BE02169A85E5BC058F226866 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		2D42FA300F71D95574A07A54 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -324,7 +451,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                1AAA11112222333344445555 /* GuestManagerView.swift in Sources */,
+				1AAA11112222333344445555 /* GuestManagerView.swift in Sources */,
 				8B9C0D1E2F30415263748596 /* NotificationService.swift in Sources */,
 				892C998C4AA4E988517A6FBF /* AboutMeView.swift in Sources */,
 				045858F18E123828ADA7C215 /* AddPersonView.swift in Sources */,
@@ -347,6 +474,19 @@
 				F26EFD67C3E39413D81B66CF /* TableMakerPublishApp.swift in Sources */,
 				72EC50E5A1C1EF96BD098D0E /* TableSharingService.swift in Sources */,
 				6034A9C00F3E4E72C70B8AD8 /* TutorialView.swift in Sources */,
+				F0A1B2C30100000100000001 /* Base64URL.swift in Sources */,
+				F0A1B2C30100000100000002 /* LZFSECompression.swift in Sources */,
+				F0A1B2C30100000100000003 /* ShareLinkBuilder.swift in Sources */,
+				F0A1B2C30100000100000004 /* ShareLinkRouter.swift in Sources */,
+				F0A1B2C30100000100000005 /* SnapshotImporter.swift in Sources */,
+				F0A1B2C30100000100000006 /* LiveShareService.swift in Sources */,
+				F0A1B2C30100000100000007 /* ShareLinkRouterTestShim.swift in Sources */,
+				AA11BB2200CCDD3311223344 /* PolarPosition.swift in Sources */,
+				AA11BB2200CCDD3311223345 /* BlueprintGrid.swift in Sources */,
+				AA11BB2200CCDD3311223346 /* LaunchAnimationController.swift in Sources */,
+				AA11BB2200CCDD3311223347 /* LaunchAnimationView.swift in Sources */,
+				AA11BB2200CCDD3311223348 /* LottieLaunchView.swift in Sources */,
+				AA11BB2200CCDD3311223350 /* LaunchIntegration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -355,6 +495,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C436D1B51B1B30C8D5095AAF /* TableMakerPublishTests.swift in Sources */,
+				AA11BB2200CCDD3311223352 /* LaunchAnimationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,12 +517,14 @@
 /* Begin XCBuildConfiguration section */
 		00126DED51AFC8FDC5C817B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ECEDD58E3DE2749A3DF8952E /* Pods-TableMakerPublish.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = 5RRK3UWHRU;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = TableMakerPublish/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -396,12 +539,15 @@
 		};
 		36E4C3D310D8A3516A0F460D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EFC208260ECFAD821F05DDCA /* Pods-TableMakerPublish.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_ENTITLEMENTS = TableMakerPublish/TableMakerPublish.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = 5RRK3UWHRU;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = TableMakerPublish/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -418,6 +564,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -434,6 +581,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -521,6 +669,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -537,6 +686,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

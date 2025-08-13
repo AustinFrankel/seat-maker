@@ -1,0 +1,16 @@
+PODS:
+  - FBAudienceNetwork (6.20.1)
+
+DEPENDENCIES:
+  - FBAudienceNetwork
+
+SPEC REPOS:
+  trunk:
+    - FBAudienceNetwork
+
+SPEC CHECKSUMS:
+  FBAudienceNetwork: 08e86d63a05b3a5a59414af12e4af8d756943c80
+
+PODFILE CHECKSUM: 3fa576f07de5173befd60d29e2b5f808ea23a9a0
+
+COCOAPODS: 1.16.2

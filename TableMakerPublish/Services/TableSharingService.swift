@@ -12,11 +12,8 @@ class TableSharingService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
-        let sharedTable = SharedTable(arrangement: arrangement)
-        
-        // In a real implementation, this would send the data to a server
-        // For now, we'll just return the shared table object
-        return sharedTable
+        // Deprecated cloud share in favor of on-device universal link builder
+        return SharedTable(arrangement: arrangement)
     }
     
     func fetchSharedTable(id: String) async throws -> SharedTable {
@@ -29,15 +26,7 @@ class TableSharingService: ObservableObject {
     }
     
     func shareTableLink(_ sharedTable: SharedTable) {
-        let activityVC = UIActivityViewController(
-            activityItems: [sharedTable.webLink],
-            applicationActivities: nil
-        )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
+        // No-op for universal link migration
     }
     
     // Generate HTML template for web display of table arrangements

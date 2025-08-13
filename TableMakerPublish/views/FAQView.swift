@@ -410,7 +410,7 @@ private let tableManagementFAQs = [
 private let featuresFAQs = [
     FAQItem(
         question: "What sharing features are available?",
-        answer: "Seat Maker offers several ways to share your arrangements:\n• Share arrangements via email or messaging\n• Export seating charts as text\n• Generate QR codes for quick sharing\n• Copy arrangements to clipboard\n• Share individual table layouts\nUse the share button in the top menu to access these features.",
+        answer: "Seat Maker offers several ways to share your arrangements:\n• Share via Universal Link QR (works from the Camera app)\n• Snapshot import works fully offline\n• Optional Live Share (nearby, peer‑to‑peer with PIN)\n• Export seating charts as text\n• Copy to clipboard and share individual tables\nAll data stays on device; no server is used.",
         icon: "square.and.arrow.up.fill",
         iconColor: .blue
     ),
@@ -432,7 +432,7 @@ private let featuresFAQs = [
 private let dataPrivacyFAQs = [
     FAQItem(
         question: "How is my data stored and protected?",
-        answer: "Seat Maker takes data privacy seriously:\n• All data is stored locally on your device\n• No data is sent to external servers\n• No third-party data sharing\n• Your seating arrangements stay private\n• Optional contact access for adding guests\nYour seating arrangements and guest information never leave your device unless you choose to share them.",
+        answer: "Seat Maker takes data privacy seriously:\n• All data is stored locally on your device\n• No data is sent to external servers\n• No tracking or analytics for shared links\n• Peer‑to‑peer sessions are end‑to‑end encrypted by the system\n• Optional contact access for adding guests\nYour seating arrangements never leave your device unless you share them.",
         icon: "lock.shield.fill",
         iconColor: .blue
     ),

@@ -181,6 +181,9 @@ struct ContentView: View {
     @State private var showingQRCodeSheet = false
     @State private var arrangementQRCode: UIImage?
     @State private var qrGenerationProgress: Double = 0.0
+    @State private var shareModeIsLive: Bool = false
+    @State private var liveAllowEditing: Bool = true
+    @State private var hostDisplayName: String = UIDevice.current.name
     @State private var showingTableManager = false
     @Environment(\.colorScheme) var systemColorScheme
     @AppStorage("isDarkMode") private var isDarkMode = false
@@ -194,6 +197,9 @@ struct ContentView: View {
     @State private var selectedContacts: Set<String> = []
     @State private var isAddButtonGlowing = false
     @State private var showingDeleteAllPeopleAlert = false
+    // Snapshot the context when opening History for contextual back navigation
+    @State private var historyOriginSnapshot: TableCollection? = nil
+    @State private var historyOriginWasEmptyState: Bool = false
     @AppStorage("loginCount") private var loginCount: Int = 0
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @State private var isShowingShareSheet = false
@@ -243,6 +249,7 @@ struct ContentView: View {
     @AppStorage("lastReviewPromptDate") private var lastReviewPromptDate: TimeInterval = 0
     @AppStorage("significantActionsCount") private var significantActionsCount: Int = 0
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial: Bool = false
+    @Environment(\.heroTableNamespace) private var heroNamespace
     
     // Add forceShowTutorial parameter
     // var forceShowTutorial: Bool = false // Removed
@@ -269,14 +276,21 @@ struct ContentView: View {
     // Add a loading state for image upload
     // @State private var isProfileImageLoading = false
     
+    // Notifications onboarding ask state
+    @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = false
+    @AppStorage("hasAskedNotificationsOnboarding") private var hasAskedNotificationsOnboarding: Bool = false
+    
+    // Breadcrumb prompt when blocking navigation on empty table
+    @State private var showAddGuestsBreadcrumb = false
+    
     var body: some View {
         ZStack {
-            tutorialView
             emptyStateConditionalView
             mainContentConditionalView
             headerConditionalView
             loadingConditionalView
             savingDialogConditionalView
+            tutorialView
         }
         .overlay(alignment: .top) {
             if let toast = openedToast {
@@ -323,19 +337,9 @@ struct ContentView: View {
             addPersonView
         }
         .sheet(isPresented: $showingHistory) {
-                HistoryView(
-                    viewModel: viewModel,
-                dismissAction: {
-                    showingHistory = false
-                    // Ensure table name is always 'Table X' if empty or 'New Arrangement'
-                    if viewModel.currentTableName.isEmpty || viewModel.currentTableName == "New Arrangement" {
-                        viewModel.currentTableName = String(format: NSLocalizedString("Table %d", comment: "Default table name"), viewModel.tableCollection.currentTableId + 1)
-                    }
-                    // If not viewing a history item, ensure we reset to welcome screen
-                    if !viewModel.isViewingHistory {
-                        resetAndShowWelcomeScreen()
-                    }
-                }
+            HistoryView(
+                viewModel: viewModel,
+                dismissAction: { handleHistoryDismiss() }
             )
         }
         .sheet(
@@ -382,15 +386,8 @@ struct ContentView: View {
             Text("Are you sure you want to delete all saved arrangements?")
         }
         .sheet(isPresented: $showExportSheet, onDismiss: {
+            // Do not reset the current table when the share/export view is dismissed without tapping Done
             showExportSheet = false
-            // Reset any related state
-            viewModel.currentArrangement = SeatingArrangement(
-                title: "New Arrangement",
-                people: [],
-                tableShape: viewModel.defaultTableShape
-            )
-            viewModel.currentTableName = ""
-            viewModel.isViewingHistory = false
         }) {
             NavigationView {
                 AllTablesExportView(
@@ -447,6 +444,22 @@ struct ContentView: View {
             resetReviewPromptCounterIfNeeded()
             
             loginCount += 1
+            NotificationCenter.default.addObserver(forName: .shareLinkImportCompleted, object: nil, queue: .main) { note in
+                if let arrangement = note.userInfo?["arrangement"] as? SeatingArrangement {
+                    Task { @MainActor in
+                        viewModel.currentArrangement = arrangement
+                        viewModel.currentTableName = arrangement.title
+                        viewModel.isViewingHistory = true
+                        showOpenedToast("Imported \(arrangement.title)")
+                        presentImportChoice(arrangement: arrangement)
+                    }
+                }
+            }
+            NotificationCenter.default.addObserver(forName: .shareLinkError, object: nil, queue: .main) { note in
+                let message = (note.userInfo?["message"] as? String) ?? "Invalid link"
+                openedToast = message
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { openedToast = nil }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ReturnToWelcomeAfterDataDelete"))) { _ in
             // Dismiss settings and return to effortless screen
@@ -531,30 +544,12 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $showingHistory) {
-                HistoryView(
-                    viewModel: viewModel,
-                    dismissAction: {
-                        showingHistory = false
-                        // Ensure table name is always 'Table X' if empty or 'New Arrangement'
-                        if viewModel.currentTableName.isEmpty || viewModel.currentTableName == "New Arrangement" {
-                            viewModel.currentTableName = String(format: NSLocalizedString("Table %d", comment: "Default table name"), viewModel.tableCollection.currentTableId + 1)
-                        }
-                        // If not viewing a history item, ensure we reset to welcome screen
-                        if !viewModel.isViewingHistory {
-                            resetAndShowWelcomeScreen()
-                        }
-                    }
-                )
-            }
-            .onChange(of: viewModel.showingShareSheet) { isShowing in
-                if !isShowing {
-                    // Reset state after sharing is complete
-                    DispatchQueue.main.async {
-                        viewModel.resetAfterSharing()
-                        showEffortlessScreen = true
-                    }
-                }
-            }
+            HistoryView(
+                viewModel: viewModel,
+                dismissAction: { handleHistoryDismiss() }
+            )
+        }
+            // Removed automatic reset after sharing; preserving current table unless user taps Done
         // Add the delete person confirmation alert (place near other alerts in the view modifiers chain):
         .alert("Delete Person?", isPresented: $showingDeletePersonAlert) {
             Button("Delete", role: .destructive) {
@@ -615,6 +610,17 @@ struct ContentView: View {
         .sheet(isPresented: $showContactsImportPrompt) { RequestContactsAccessView { _ in showContactsImportPrompt = false; showEffortlessScreen = false } }
     }
     
+    // Extracted helper to reduce type-check complexity
+    private func composedEventTitle() -> String {
+        let eventTitle = viewModel.currentArrangement.eventTitle
+        let hasEventTitle = eventTitle?.isEmpty == false
+        let fallbackTitle = arrangementTitle.isEmpty ? viewModel.currentArrangement.title : arrangementTitle
+        let displayTitle = hasEventTitle ? (eventTitle ?? "") : fallbackTitle
+        let finalTitle = displayTitle.isEmpty ? "New Arrangement" : displayTitle
+        let (formattedTitle, emoji) = UIHelpers.formatEventTitle(finalTitle)
+        return "\(emoji) \(formattedTitle)"
+    }
+    
     // Add a function to set up notification observers
     private func setupNotificationObservers() {
         NotificationCenter.default.addObserver(
@@ -645,8 +651,23 @@ struct ContentView: View {
             ZStack {
                 // Left and right controls
                 HStack {
-                    // Hide settings button if tutorial is showing or empty state
-                    if !showingTutorial && !showEffortlessScreen && !viewModel.isViewingHistory && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
+                    // Left side: Back when viewing history, otherwise Settings (if appropriate)
+                    if viewModel.isViewingHistory {
+                        Button(action: {
+                            triggerHaptic()
+                            handleHistoryBack()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 20, weight: .semibold))
+                                Text("Back")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.blue)
+                            .frame(height: 48)
+                        }
+                        .padding(.top, 3)
+                    } else if !showingTutorial && !showEffortlessScreen && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
                         Button(action: {
                             triggerHaptic()
                             showingSettings = true
@@ -661,7 +682,7 @@ struct ContentView: View {
                         Spacer().frame(width: 40)
                     }
                     Spacer()
-                    if !showingTutorial && !viewModel.isViewingHistory && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
+                    if !showingTutorial && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
                         HStack(spacing: 4) {
                             Button(action: { triggerHaptic(); showingTableManager = true }) {
                                 Image(systemName: "rectangle.grid.2x2")
@@ -670,7 +691,7 @@ struct ContentView: View {
                                     .frame(width: 40, height: 40)
                                     .accessibilityLabel("View tables")
                             }
-                            .offset(y: 0)
+                            .offset(y: 2) // move the icon down two pixels
                             Button(action: { triggerHaptic(); showingSaveDialog = true }) {
                                 Image(systemName: "square.and.arrow.up")
                                     .font(.system(size: 24))
@@ -680,7 +701,7 @@ struct ContentView: View {
                             .disabled(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty)
                             .opacity((viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty) ? 0.5 : 1)
                         }
-                        .padding(.top, 6)
+                        .padding(.top, 6) // default
                     } else {
                         Spacer().frame(width: 40)
                     }
@@ -695,12 +716,12 @@ struct ContentView: View {
                         }
                     }
                     .font(.system(size: 22, weight: .bold))
-                    .padding(.top, viewModel.isViewingHistory ? 17 : 8)
+                    .padding(.top, 8)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .padding(.horizontal)
-            .padding(.top, viewModel.isViewingHistory ? 20 : 3)
+            .padding(.top, 3)
             .padding(.bottom, 3)
             Spacer()
         }
@@ -817,9 +838,7 @@ struct ContentView: View {
     
     private var mainContent: some View {
         VStack(spacing: 10) {
-            if viewModel.isViewingHistory {
-                historyBackButton
-            }
+            // History back button is now integrated in header when viewing history
             // Show tutorial if necessary (first launch)
             if !UserDefaults.standard.bool(forKey: "hasSeenTutorial") && showingTutorial {
                 TutorialView(onComplete: {
@@ -865,9 +884,7 @@ struct ContentView: View {
     private var mainContentContent: some View {
         VStack(spacing: 10) {
             // Content that was inside the old mainContent private var
-            if viewModel.isViewingHistory {
-                historyBackButton
-            }
+            // History back button is now integrated in header when viewing history
             // This part is now handled by the top-level conditional in 'body'
             // No need to repeat the tutorial/emptyState/tableAndPeople logic here
             
@@ -876,26 +893,7 @@ struct ContentView: View {
         }
     }
     
-    private var historyBackButton: some View {
-        HStack {
-            Button(action: {
-                withAnimation {
-                    viewModel.resetArrangement()
-                }
-            }) {
-                HStack {
-                    Image(systemName: "chevron.left")
-                    Text("Back")
-                }
-                .foregroundColor(.blue)
-                .padding(.horizontal)
-            }
-             Spacer()
-            
-            // Removed settings button from history view
-        }
-        .padding(.top, 50) // Move down even more (was 35)
-    }
+    // Removed legacy historyBackButton; handled in header now
     
     private var tableAndPeopleView: some View {
         VStack(spacing: 10) {
@@ -957,13 +955,20 @@ struct ContentView: View {
                                     }
                                 } else if value.translation.width < -50 {
                                     // Left to right swipe - navigate right
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        viewModel.saveCurrentTableState()
-                                        viewModel.navigateToTable(direction: .right)
-                                        // Prompt for name on new table
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            if viewModel.currentTableName.isEmpty {
-                                                showNewTablePrompt = true
+                                    if viewModel.currentArrangement.people.isEmpty {
+                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                            withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
+                                        }
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            viewModel.saveCurrentTableState()
+                                            viewModel.navigateToTable(direction: .right)
+                                            // Prompt for name on new table
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                                if viewModel.currentTableName.isEmpty {
+                                                    showNewTablePrompt = true
+                                                }
                                             }
                                         }
                                     }
@@ -991,13 +996,21 @@ struct ContentView: View {
                             direction: .right,
                             tableShape: viewModel.currentArrangement.tableShape,
                             action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    viewModel.saveCurrentTableState() // Save before navigating
-                                    viewModel.navigateToTable(direction: .right)
-                                    // Ensure we register the new table with system and prompt for name
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                        if viewModel.currentTableName.isEmpty {
-                                            showNewTablePrompt = true
+                                // Block navigating to next table if current table has no guests
+                                if viewModel.currentArrangement.people.isEmpty {
+                                    withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
+                                    }
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        viewModel.saveCurrentTableState() // Save before navigating
+                                        viewModel.navigateToTable(direction: .right)
+                                        // Ensure we register the new table with system and prompt for name
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            if viewModel.currentTableName.isEmpty {
+                                                showNewTablePrompt = true
+                                            }
                                         }
                                     }
                                 }
@@ -1009,6 +1022,20 @@ struct ContentView: View {
                     .padding(.horizontal, viewModel.currentArrangement.tableShape == .round ? 60 : 40) // wider for round tables
                     .padding(.top, getTableNameYPosition() - 75) // Match the vertical center of the table name
                 )
+                // Breadcrumb message when trying to navigate with empty table
+                .overlay(alignment: .top) {
+                    if showAddGuestsBreadcrumb {
+                        Text("Add guests first")
+                            .font(.caption.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.red.opacity(0.9)))
+                            .shadow(color: Color.red.opacity(0.25), radius: 8, x: 0, y: 4)
+                            .padding(.top, 6)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
             
             // Table ID indicator - made completely invisible
             ZStack {
@@ -1130,73 +1157,27 @@ struct ContentView: View {
                 .padding(.top, 2) // Changed from -2 to 2 to move down 4 more pixels
             
             // Add/Delete buttons floating above Shuffle/History, with less space and smaller size
-            ZStack {
-                HStack(spacing: 12) { // Reduced spacing
-                    Button(action: {
-                        triggerHaptic(.medium)
-                        newPersonName = ""
-                        showingAddPerson = true
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 15, weight: .semibold)) // Reduced from 17
-                                .accessibilityHidden(true)
-                            Text(viewModel.currentArrangement.people.isEmpty ? NSLocalizedString("Get Started", comment: "Button to get started") : NSLocalizedString("Add", comment: "Button to add a person"))
-                                .font(.system(size: 15, weight: .semibold)) // Increased from 13
-                                .dynamicTypeSize(.xSmall ... .accessibility5)
-                                .minimumScaleFactor(0.7)
-                                .lineLimit(1)
-                                .accessibilityLabel(viewModel.currentArrangement.people.isEmpty ? NSLocalizedString("Get Started", comment: "Button to get started") : NSLocalizedString("Add Person", comment: "Button to add a person"))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16) // Reduced from 20
-                        .padding(.vertical, 9) // Reduced from 12
-                        .background(
-                            Capsule()
-                                .fill(Color.green)
-                                .shadow(color: Color.green.opacity(0.22), radius: 6, x: 0, y: 2)
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .contentShape(Rectangle())
-                    .zIndex(2)
-                    .accessibilityAddTraits(.isButton)
-
-                    Button(action: {
-                        triggerHaptic(.medium)
-                        showingDeleteAllPeopleAlert = true
-                    }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .bold)) // Reduced from 18
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36) // Reduced from 44x44
-                            .background(
-                                Circle()
-                                    .fill(Color.red)
-                                    .shadow(color: Color.red.opacity(0.22), radius: 6, x: 0, y: 2)
-                            )
-                    }
-                    .disabled(viewModel.currentArrangement.people.isEmpty)
-                    .opacity(viewModel.currentArrangement.people.isEmpty ? 0.5 : 1.0)
-                    .zIndex(2)
-                    .alert("Clear Table?", isPresented: $showingDeleteAllPeopleAlert) {
-                        Button("Clear", role: .destructive) {
-                            // Remove all people from the current table
-                            viewModel.currentArrangement.people.removeAll()
-                            viewModel.currentArrangement.seatAssignments.removeAll()
-                            // Save the current state
-                            viewModel.saveCurrentTableState()
-                        }
-                        Button("Cancel", role: .cancel) { }
-                    } message: {
-                        Text("Are you sure you want to remove all people from this table?")
-                    }
-                }
-                .padding(.bottom, 4) // Less float above Shuffle/History
-                .padding(.top, 2)
-                .frame(maxWidth: .infinity)
-                .offset(y: 0) // No extra float
-            }
+			ZStack {
+				AddDeleteButtonsBar(
+					viewModel: viewModel,
+					showingAddPerson: $showingAddPerson,
+					showingDeleteAllPeopleAlert: $showingDeleteAllPeopleAlert,
+					onAdd: {
+						triggerHaptic(.medium)
+						newPersonName = ""
+						showingAddPerson = true
+					},
+					onClearAll: {
+						viewModel.currentArrangement.people.removeAll()
+						viewModel.currentArrangement.seatAssignments.removeAll()
+						viewModel.saveCurrentTableState()
+					}
+				)
+				.padding(.bottom, 4)
+				.padding(.top, 2)
+				.frame(maxWidth: .infinity)
+				.offset(y: 0)
+			}
             .frame(maxWidth: .infinity)
             .zIndex(2)
 
@@ -1227,12 +1208,18 @@ struct ContentView: View {
                             .shadow(color: Color.blue.opacity(0.18), radius: 8, x: 0, y: 2)
                     )
                 }
-                .accessibilityLabel("Shuffle seats")
+                .accessibilityLabel("Shuffle")
                 .accessibilityAddTraits(.isButton)
                 .disabled(viewModel.currentArrangement.people.isEmpty)
                 .opacity(viewModel.currentArrangement.people.isEmpty ? 0.5 : 1)
 
-                Button(action: { triggerHaptic(.medium); showingHistory = true }) {
+                Button(action: {
+                    triggerHaptic(.medium)
+                    // Snapshot origin before presenting History
+                    historyOriginSnapshot = viewModel.tableCollection
+                    historyOriginWasEmptyState = showEffortlessScreen
+                    showingHistory = true
+                }) {
                     HStack(spacing: 10) {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 20, weight: .bold)) // Increased from 18
@@ -1471,7 +1458,12 @@ struct ContentView: View {
             .opacity(viewModel.currentArrangement.people.isEmpty ? 0.5 : 1)
             .padding(.top, -37) // Was -30, now -37 (move up 7px)
 
-            Button(action: { triggerHaptic(.medium); showingHistory = true }) {
+            Button(action: {
+                triggerHaptic(.medium)
+                historyOriginSnapshot = viewModel.tableCollection
+                historyOriginWasEmptyState = showEffortlessScreen
+                showingHistory = true
+            }) {
                 HStack {
                     Image(systemName: "clock.arrow.circlepath")
                     Text("HISTORY")
@@ -1549,13 +1541,14 @@ struct ContentView: View {
                           daysSinceLastPrompt >= 7 && 
                           reviewPromptCount < 3
         
-        if shouldPrompt {
+        if shouldPrompt && !hasPromptedForReview {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                  AppStore.requestReview(in: windowScene)
                 reviewPromptCount += 1
                 lastReviewPromptDate = currentTime
                 // Reset significant actions counter
                 significantActionsCount = 0
+                hasPromptedForReview = true
             }
         }
     }
@@ -1577,15 +1570,16 @@ struct ContentView: View {
             ForEach(shapeOrder, id: \.self) { shape in
                 Button(action: { 
                     triggerHaptic(.medium)
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { 
-                        viewModel.currentArrangement.tableShape = shape 
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        viewModel.currentArrangement.tableShape = shape
                     }
                 }) {
                     TableShapeSelectorButton(
                         shape: shape,
                         isSelected: viewModel.currentArrangement.tableShape == shape,
                         action: {
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            triggerHaptic(.medium)
+                            withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.75, blendDuration: 0.12)) {
                                 viewModel.currentArrangement.tableShape = shape
                             }
                         }
@@ -1608,31 +1602,22 @@ struct ContentView: View {
                 VStack(spacing: 1) {
                     let outlineColor: Color = isSelected ? Color.blue : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.gray.opacity(0.45))
                     let outlineWidth: CGFloat = isSelected ? 3 : 2.1
-                    switch shape {
+            switch shape {
                     case .round:
                         Circle()
                             .stroke(outlineColor, lineWidth: outlineWidth)
                             .frame(width: 38, height: 38)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                removal: .scale(scale: 0.8).combined(with: .opacity)
-                            ))
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
                     case .rectangle:
                         Rectangle()
                             .stroke(outlineColor, lineWidth: outlineWidth)
                             .frame(width: 54, height: 38)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                removal: .scale(scale: 0.8).combined(with: .opacity)
-                            ))
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
                     case .square:
                         Rectangle()
                             .stroke(outlineColor, lineWidth: outlineWidth)
                             .frame(width: 38, height: 38)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                removal: .scale(scale: 0.8).combined(with: .opacity)
-                            ))
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
                     }
                     Text(shape.displayName.replacingOccurrences(of: " Table", with: ""))
                         .font(.system(size: 12, weight: .medium))
@@ -1711,14 +1696,26 @@ struct ContentView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color.blue)
+                            // Base shadow
                             .shadow(color: Color.blue.opacity(0.25), radius: 8, x: 0, y: 4)
+                            // Subtle glow
+                            .shadow(color: Color.blue.opacity(0.55), radius: 12, x: 0, y: 0)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.blue.opacity(0.35), lineWidth: 1.5)
+                            .blur(radius: 0.5)
                     )
                     .frame(width: 183)
                 }
                 .padding(.top, 4)
                 
                 if viewModel.hasSavedArrangements {
-                    Button(action: { showingHistory = true }) {
+                    Button(action: {
+                        historyOriginSnapshot = viewModel.tableCollection
+                        historyOriginWasEmptyState = showEffortlessScreen
+                        showingHistory = true
+                    }) {
                         HStack {
                             Image(systemName: "clock.arrow.circlepath")
                             Text("View History")
@@ -1748,6 +1745,9 @@ struct ContentView: View {
             .padding(.top, 18)
         }
         .transition(.opacity.combined(with: .scale))
+        .onAppear {
+            requestNotificationsOnboardingIfAppropriate()
+        }
     }
     
     private func stepRow(number: Int, text: String) -> some View {
@@ -1807,21 +1807,22 @@ struct ContentView: View {
                 }) {
                     HStack {
                         Image(systemName: "text.badge.plus")
-                        Text("Import from List").fontWeight(.semibold)
+                        Text("Import from List")
                     }
                     .font(.headline) // match contacts
                     .dynamicTypeSize(.xSmall ... .accessibility5)
                     .minimumScaleFactor(0.7)
                     .foregroundColor(.blue)
-                    .padding(.horizontal, 28)
+                    .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .padding(.top, 5)
+                    .frame(height: 52)
+                    .frame(maxWidth: 320)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.blue.opacity(0.12))
+                            .fill(Color.blue.opacity(0.10))
                     )
                 }
-                .padding(.horizontal, -4) // widen slightly more
+                .padding(.horizontal, 0)
                 // Removed dropdown; handled directly in button action above
                 // Import from Contacts button (bottom)
                 Button(action: {
@@ -1857,15 +1858,17 @@ struct ContentView: View {
                     .dynamicTypeSize(.xSmall ... .accessibility5)
                     .minimumScaleFactor(0.7)
                     .foregroundColor(.blue)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
                     .padding(.vertical, 12)
+                    .frame(height: 52)
+                    .frame(maxWidth: 320)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.blue.opacity(0.08))
+                            .fill(Color.blue.opacity(0.10))
                     )
                 }
                 .disabled(viewModel.isLoadingContacts) // Disable button while loading contacts
-                .padding(.top, 8)
+                .padding(.top, 4)
                 .padding(.bottom, 6)
                 .accessibilityLabel("Import from Contacts")
                 .accessibilityHint("Opens your contacts list to select people to add to the table")
@@ -2837,6 +2840,173 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Messages compose wrapper
+    struct MessageComposeView: UIViewControllerRepresentable {
+        let recipients: [String]
+        let body: String?
+        @Environment(\.dismiss) private var dismiss
+
+        class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+            var parent: MessageComposeView
+            init(parent: MessageComposeView) { self.parent = parent }
+            func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
+                controller.dismiss(animated: true)
+            }
+        }
+
+        func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+        func makeUIViewController(context: Context) -> MFMessageComposeViewController {
+            let vc = MFMessageComposeViewController()
+            vc.messageComposeDelegate = context.coordinator
+            vc.recipients = recipients
+            if let body = body { vc.body = body }
+            return vc
+        }
+
+        func updateUIViewController(_ uiViewController: MFMessageComposeViewController, context: Context) {}
+    }
+    
+    // MARK: - Group Text trigger button
+    struct GroupTextButton: View {
+        @ObservedObject var viewModel: SeatingViewModel
+        @State private var showComposer = false
+        @State private var recipients: [String] = []
+        @State private var showAlert = false
+        @State private var alertMessage = ""
+
+        var body: some View {
+            Button(action: { Task { await prepareAndShow() } }) {
+                Label("Text All Guests", systemImage: "message")
+                    .foregroundColor(.white)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24 + 15)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.green)
+                    )
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.6 + 15)
+            }
+            .disabled(!MFMessageComposeViewController.canSendText())
+            .opacity(MFMessageComposeViewController.canSendText() ? 1 : 0.5)
+            .sheet(isPresented: $showComposer) {
+                MessageComposeView(recipients: recipients, body: defaultBody())
+            }
+            .alert("Cannot Text Guests", isPresented: $showAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+
+        private func defaultBody() -> String {
+            let title = viewModel.currentArrangement.eventTitle ?? viewModel.currentTableName
+            if title.isEmpty { return "Hi everyone – details for your table from Seat Maker." }
+            return "Hi everyone – info for \(title) from Seat Maker."
+        }
+
+        private func uniquePeopleAcrossNonEmptyTables() -> [Person] {
+            let tables = viewModel.tableCollection.tables.values.filter { !$0.people.isEmpty }
+            var seen: Set<UUID> = []
+            var result: [Person] = []
+            for table in tables {
+                for p in table.people where !seen.contains(p.id) {
+                    seen.insert(p.id)
+                    result.append(p)
+                }
+            }
+            return result
+        }
+
+        private func prepareAndShow() async {
+            guard MFMessageComposeViewController.canSendText() else {
+                alertMessage = "This device can't send messages."
+                showAlert = true
+                return
+            }
+
+            let people = uniquePeopleAcrossNonEmptyTables()
+            if people.isEmpty {
+                alertMessage = "No guests found to text. Add people to a table first."
+                showAlert = true
+                return
+            }
+
+            let numbers = await viewModel.fetchPhoneNumbers(for: people)
+            if numbers.isEmpty {
+                alertMessage = "Couldn't find phone numbers for these guests in your Contacts. Make sure your contacts include phone numbers and match the guests' names."
+                showAlert = true
+                return
+            }
+            recipients = numbers
+            showComposer = true
+        }
+    }
+
+    // A smaller per-table variant that only targets the provided people
+    struct GroupTextButtonForPeople: View {
+        @ObservedObject var viewModel: SeatingViewModel
+        let people: [Person]
+        @State private var showComposer = false
+        @State private var recipients: [String] = []
+        @State private var showAlert = false
+        @State private var alertMessage = ""
+
+        var body: some View {
+            HStack {
+                Spacer()
+                Button(action: { Task { await prepareAndShow() } }) {
+                    Label("Text This Table", systemImage: "message")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.green.opacity(0.9))
+                        )
+                        .foregroundColor(.white)
+                }
+                .disabled(!MFMessageComposeViewController.canSendText())
+                .opacity(MFMessageComposeViewController.canSendText() ? 1 : 0.5)
+            }
+            .sheet(isPresented: $showComposer) {
+                MessageComposeView(recipients: recipients, body: defaultBody())
+            }
+            .alert("Cannot Text Guests", isPresented: $showAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+
+        private func defaultBody() -> String {
+            let title = viewModel.currentArrangement.eventTitle ?? viewModel.currentTableName
+            if title.isEmpty { return "Hi everyone – details for your table from Seat Maker." }
+            return "Hi everyone – info for \(title) from Seat Maker."
+        }
+
+        private func prepareAndShow() async {
+            guard MFMessageComposeViewController.canSendText() else {
+                alertMessage = "This device can't send messages."
+                showAlert = true
+                return
+            }
+            if people.isEmpty {
+                alertMessage = "No guests found to text."
+                showAlert = true
+                return
+            }
+            let numbers = await viewModel.fetchPhoneNumbers(for: people)
+            if numbers.isEmpty {
+                alertMessage = "Couldn't find phone numbers for these guests in your Contacts. Make sure your contacts include phone numbers and match the guests' names."
+                showAlert = true
+                return
+            }
+            recipients = numbers
+            showComposer = true
+        }
+    }
+    
     // Helper function to get color for a person
     private func getPersonColor(for index: Int) -> Color {
         personColors[index % personColors.count]
@@ -2881,6 +3051,7 @@ struct ContentView: View {
     
     // Completely rewritten TableView implementation to fix rectangle and square tables
     struct TableView: View {
+        @Environment(\.heroTableNamespace) private var heroNamespace
         let arrangement: SeatingArrangement
         let getPersonColor: (UUID) -> Color
         let onPersonTap: (Person) -> Void
@@ -2908,6 +3079,7 @@ struct ContentView: View {
 
                 ZStack {
                     tableShape(in: geometry)
+                    matchedGeometryAnchor(in: geometry)
                     ForEach(arrangement.people) { person in
                         if let seatNumber = arrangement.seatAssignments[person.id] {
                             if seatPositions.indices.contains(seatNumber) {
@@ -2980,6 +3152,27 @@ struct ContentView: View {
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: arrangement.tableShape)
                 )
             }
+        }
+
+        private func matchedGeometryAnchor(in geometry: GeometryProxy) -> some View {
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let overlayFrame: CGSize
+            switch arrangement.tableShape {
+            case .round:
+                let side = min(width, height) * 0.95
+                overlayFrame = CGSize(width: side, height: side)
+            case .rectangle:
+                overlayFrame = CGSize(width: width * 0.95, height: height * 0.75)
+            case .square:
+                let side = min(width, height) * 0.9
+                overlayFrame = CGSize(width: side, height: side)
+            }
+            return Color.clear
+                .frame(width: overlayFrame.width, height: overlayFrame.height)
+                .position(x: width/2, y: height/2)
+                .heroMatched(ns: heroNamespace)
+                .allowsHitTesting(false)
         }
     }
 
@@ -3182,6 +3375,39 @@ struct ContentView: View {
         // Use a coordinator to present the ActivityView with custom items
         exportItems = items
         showExportSheet = true
+        // Trigger an interstitial before user proceeds from sharing to the create-seating screen
+        #if canImport(FBAudienceNetwork)
+        InterstitialAdManager.shared.load()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            InterstitialAdManager.shared.showIfReady()
+        }
+        #endif
+    }
+
+    // Present a confirmation sheet with Viewer / Make Editable
+    private func presentImportChoice(arrangement: SeatingArrangement) {
+        let alert = UIAlertController(title: "Imported ‘\(arrangement.title)’", message: "Open read-only or create an editable copy.", preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Open as Viewer", style: .default, handler: { _ in
+            // Leave as-is, read-only view can be represented by isViewingHistory true
+            viewModel.isViewingHistory = true
+        }))
+        alert.addAction(UIAlertAction(title: "Make Editable", style: .default, handler: { _ in
+            // Create local editable copy and switch out of history mode
+            var editable = arrangement
+            editable.id = UUID()
+            editable.date = Date()
+            viewModel.currentArrangement = editable
+            viewModel.currentTableName = editable.title
+            viewModel.isViewingHistory = false
+            viewModel.saveCurrentArrangement()
+        }))
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(alert, animated: true) {
+                ShareLinkRouter.shared.markPresentationComplete()
+            }
+        }
     }
     
     @State private var exportItems: [Any] = []
@@ -3190,7 +3416,19 @@ struct ContentView: View {
     private var qrCodeShareView: some View {
         NavigationView {
             VStack(spacing: 20) {
-                // Header with BETA badge
+                // Mode controls
+                Picker("Mode", selection: $shareModeIsLive) {
+                    Text("Snapshot").tag(false)
+                    Text("Live Share").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                if shareModeIsLive {
+                    Toggle("Allow edits for joiners", isOn: $liveAllowEditing)
+                        .padding(.horizontal)
+                }
+                
+                // Header with BETA badge (moved up by reducing top padding)
                 VStack(spacing: 8) {
                     Text(userName.isEmpty ? "Your Table QR Code" : "\(userName)'s Table QR Code")
                         .font(.title.bold())
@@ -3214,7 +3452,7 @@ struct ContentView: View {
                         )
                         .shadow(color: .orange.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
-                .padding(.top, 20)
+                .padding(.top, 4)
                 
                 if let qrCode = arrangementQRCode {
                     ZStack {
@@ -3241,8 +3479,8 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    .frame(width: 280, height: 320)
-                    .padding(.bottom, 12)
+                    .frame(width: 280, height: 300)
+                    .padding(.bottom, 6)
                 } else {
                     VStack(spacing: 20) {
                         // Enhanced loading animation
@@ -3338,7 +3576,18 @@ struct ContentView: View {
                     )
                     .padding(.horizontal, 8)
                 }
-                Spacer()
+                Spacer(minLength: 8)
+                if shareModeIsLive {
+                    Button(action: {
+                        LiveShareService.shared.stopHostingOrBrowsing()
+                    }) {
+                        Label("Stop Sharing", systemImage: "wifi.slash")
+                            .font(.subheadline)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.red.opacity(0.15)))
+                    }
+                }
                 Button(action: {
                     if let qrCode = arrangementQRCode {
                         let activityVC = UIActivityViewController(
@@ -3359,12 +3608,15 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .shadow(color: Color.blue.opacity(0.12), radius: 4, x: 0, y: 2)
                 }
-                .padding(.bottom, 18)
+                .padding(.bottom, 8)
             }
             .navigationBarTitle("QR Code", displayMode: .inline)
             .navigationBarItems(trailing: Button("Done") {
                 showingQRCodeSheet = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if shareModeIsLive {
+                        LiveShareService.shared.stopHostingOrBrowsing()
+                    }
                     resetToEmptyTable()
                     showEffortlessScreen = true
                     viewModel.refreshStatistics()
@@ -3376,61 +3628,30 @@ struct ContentView: View {
     
     // Function to generate QR code from arrangement data
     private func generateQRCode() {
-        // Capture main actor-isolated properties before entering async context
         let arrangement = viewModel.currentArrangement
-        let tableName = viewModel.currentTableName.isEmpty ? "Table \(viewModel.tableCollection.currentTableId + 1)" : viewModel.currentTableName
-        
-        // Use background queue for faster generation with progress tracking
         DispatchQueue.global(qos: .userInitiated).async {
-            // Update progress: Starting
-            DispatchQueue.main.async {
-                self.qrGenerationProgress = 0.2
-            }
-            
-            // Update progress: Data prepared
-            DispatchQueue.main.async {
-                self.qrGenerationProgress = 0.4
-            }
-            
-            // Create the HTML content directly
-            let htmlContent = self.createTableHTML(arrangement: arrangement, tableName: tableName)
-            
-            // Create a proper data URL with base64 encoding for better compatibility
-            guard let htmlData = htmlContent.data(using: .utf8) else {
-                DispatchQueue.main.async {
-                    self.createTextBasedQRCode(from: "Table arrangement data")
-                    self.qrGenerationProgress = 1.0
-                }
-                return
-            }
-            
-            let base64HTML = htmlData.base64EncodedString()
-            let dataURL = "data:text/html;base64,\(base64HTML)"
-            
-            // Ensure the data URL is not too long (QR code limit is around 4,296 characters)
-            if dataURL.count > 4000 {
-                // If too long, create a simplified version
-                let simplifiedHTML = self.createSimplifiedTableHTML(arrangement: arrangement, tableName: tableName)
-                if let simplifiedData = simplifiedHTML.data(using: .utf8) {
-                    let simplifiedBase64 = simplifiedData.base64EncodedString()
-                    let simplifiedDataURL = "data:text/html;base64,\(simplifiedBase64)"
-                    
-                    // Use simplified version if it's shorter
-                    if simplifiedDataURL.count <= 4000 {
-                        self.generateQRFromDataURL(simplifiedDataURL)
-                        return
+            DispatchQueue.main.async { self.qrGenerationProgress = 0.2 }
+            do {
+                let url: URL
+                if self.shareModeIsLive {
+                    let sessionID = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(8).uppercased()
+                    let session = String(sessionID)
+                    // Start hosting immediately for live mode (no PIN)
+                    LiveShareService.shared.host(sessionID: session, requiresPIN: "000000") { [arrangement] in
+                        return arrangement
                     }
+                    url = try ShareLinkBuilder.buildLiveLink(arrangementTitle: arrangement.title, sessionID: session, allowEditing: self.liveAllowEditing, hostDisplayName: self.hostDisplayName)
+                } else {
+                    url = try ShareLinkBuilder.buildSnapshotLink(arrangement: arrangement, hostDisplayName: self.hostDisplayName)
                 }
-                
-                // If still too long, fall back to a simple text QR
+                DispatchQueue.main.async { self.qrGenerationProgress = 0.6 }
+                self.generateQRFromDataURL(url.absoluteString)
+            } catch {
                 DispatchQueue.main.async {
-                    self.createTextBasedQRCode(from: tableName)
+                    self.createTextBasedQRCode(from: "Seat Maker")
                     self.qrGenerationProgress = 1.0
                 }
-                return
             }
-            
-            self.generateQRFromDataURL(dataURL)
         }
     }
     
@@ -4031,7 +4252,7 @@ struct HistoryView: View {
                     .frame(width: 50, height: 1)
             }
             .padding(.horizontal)
-            .padding(.top, 45) // Move down even more (was 30)
+            .padding(.top, 37) // Move up 8px from 45
             .padding(.bottom, 2)
                 Spacer().frame(height: 6) // Add space before swipe row
                 HStack {
@@ -4045,18 +4266,23 @@ struct HistoryView: View {
                     Image(systemName: "pin")
                         .foregroundColor(.blue)
                         .font(.system(size: 16))
+                        .padding(.bottom, 8) // move up visually by adding bottom padding to the row below
                     Text("←")
                         .foregroundColor(.blue)
                         .font(.system(size: 16))
+                        .padding(.bottom, 8)
                     Text("|")
                         .foregroundColor(.gray)
                         .font(.system(size: 16))
+                        .padding(.bottom, 8)
                     Text("→")
                         .foregroundColor(.red)
                         .font(.system(size: 16))
+                        .padding(.bottom, 8)
                     Image(systemName: "trash")
                         .foregroundColor(.red)
                         .font(.system(size: 16))
+                        .padding(.bottom, 8)
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 7)
@@ -5183,6 +5409,106 @@ struct TermsView: View {
         showEffortlessScreen = true // Show the empty state screen
     }
 
+    private func handleHistoryBack() {
+        // Dismiss history sheet first
+        showingHistory = false
+        // Restore depending on origin
+        if let snapshot = historyOriginSnapshot {
+            // If history opened from another table context, restore it
+            viewModel.tableCollection = snapshot
+            if let current = snapshot.tables[snapshot.currentTableId] {
+                viewModel.currentArrangement = current
+                viewModel.currentTableName = current.title
+            }
+            viewModel.isViewingHistory = false
+            // Preserve whether we were on the empty state (Create seating for events)
+            showEffortlessScreen = historyOriginWasEmptyState
+        } else {
+            // No snapshot means opened from Create Seating for Events
+            // Keep user on the Create Seating screen
+            showEffortlessScreen = true
+            viewModel.isViewingHistory = false
+        }
+        // Clear snapshot after use
+        historyOriginSnapshot = nil
+        historyOriginWasEmptyState = false
+    }
+
+    private func handleHistoryDismiss() {
+        showingHistory = false
+        // Ensure table name is always 'Table X' if empty or 'New Arrangement'
+        if viewModel.currentTableName.isEmpty || viewModel.currentTableName == "New Arrangement" {
+            viewModel.currentTableName = String(format: NSLocalizedString("Table %d", comment: "Default table name"), viewModel.tableCollection.currentTableId + 1)
+        }
+        // If not viewing a history item, ensure we reset to welcome screen
+        if !viewModel.isViewingHistory {
+            // Respect origin: if coming from create seating, keep effortless screen
+            showEffortlessScreen = true
+        }
+        // Clear snapshot when dismissing
+        historyOriginSnapshot = nil
+        historyOriginWasEmptyState = false
+    }
+
+    // Extracted Add/Delete bar to isolate any layout/capture issues
+    private struct AddDeleteButtonsBar: View {
+        @ObservedObject var viewModel: SeatingViewModel
+        @Binding var showingAddPerson: Bool
+        @Binding var showingDeleteAllPeopleAlert: Bool
+        var onAdd: () -> Void
+        var onClearAll: () -> Void
+        var body: some View {
+            HStack(spacing: 12) {
+                Button(action: onAdd) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .accessibilityHidden(true)
+                        Text(viewModel.currentArrangement.people.isEmpty ? NSLocalizedString("Get Started", comment: "Button to get started") : NSLocalizedString("Add", comment: "Button to add a person"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .dynamicTypeSize(.xSmall ... .accessibility5)
+                            .minimumScaleFactor(0.7)
+                            .lineLimit(1)
+                            .accessibilityLabel(viewModel.currentArrangement.people.isEmpty ? NSLocalizedString("Get Started", comment: "Button to get started") : NSLocalizedString("Add Person", comment: "Button to add a person"))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(Color.green)
+                            .shadow(color: Color.green.opacity(0.22), radius: 6, x: 0, y: 2)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .contentShape(Rectangle())
+                .zIndex(2)
+                .accessibilityAddTraits(.isButton)
+
+                Button(action: { showingDeleteAllPeopleAlert = true }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(Color.red)
+                                .shadow(color: Color.red.opacity(0.22), radius: 6, x: 0, y: 2)
+                        )
+                }
+                .disabled(viewModel.currentArrangement.people.isEmpty)
+                .opacity(viewModel.currentArrangement.people.isEmpty ? 0.5 : 1.0)
+                .zIndex(2)
+                .alert("Clear Table?", isPresented: $showingDeleteAllPeopleAlert) {
+                    Button("Clear", role: .destructive) { onClearAll() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Are you sure you want to remove all people from this table?")
+                }
+            }
+        }
+    }
+
     // --- Moved computed properties inside ContentView ---
     private var tutorialView: some View {
         Group {
@@ -5191,14 +5517,53 @@ struct TermsView: View {
                     UserDefaults.standard.set(true, forKey: "hasSeenTutorial")
                     showingTutorial = false
                     showEffortlessScreen = true // Show creating seating for events screen
+                    // Ask notifications permission right after onboarding completes
+                    requestNotificationsOnboardingIfAppropriate()
                 })
                 .edgesIgnoringSafeArea(.all)
             }
         }
     }
+
+    // MARK: - Notifications Onboarding
+    private func requestNotificationsOnboardingIfAppropriate() {
+        // Only auto-ask once during onboarding
+        if hasAskedNotificationsOnboarding { return }
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                    DispatchQueue.main.async {
+                        self.hasAskedNotificationsOnboarding = true
+                        if granted {
+                            self.notificationsEnabled = true
+                            NotificationService.shared.enableDailyReminder()
+                        }
+                    }
+                }
+            case .authorized, .provisional, .ephemeral:
+                DispatchQueue.main.async {
+                    self.hasAskedNotificationsOnboarding = true
+                    // Auto-enable alerts since permission is already granted
+                    self.notificationsEnabled = true
+                    NotificationService.shared.enableDailyReminder()
+                }
+            case .denied:
+                DispatchQueue.main.async {
+                    self.hasAskedNotificationsOnboarding = true
+                }
+            @unknown default:
+                DispatchQueue.main.async {
+                    self.hasAskedNotificationsOnboarding = true
+                }
+            }
+        }
+    }
     private var emptyStateConditionalView: some View {
         Group {
-            if self.showEffortlessScreen || (viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0 && !viewModel.isViewingHistory) {
+            if (self.showEffortlessScreen || (viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0 && !viewModel.isViewingHistory))
+                && !(showingTutorial || !UserDefaults.standard.bool(forKey: "hasSeenTutorial")) {
                 emptyStateView
                     .preferredColorScheme(.light)
             }
@@ -5431,6 +5796,17 @@ struct AllTablesExportView: View {
         }
     }
     
+    // Local helper for event title formatting to keep expressions small for the type-checker
+    private func composedEventTitle() -> String {
+        let eventTitle = viewModel.currentArrangement.eventTitle
+        let hasEventTitle = eventTitle?.isEmpty == false
+        let fallbackTitle = arrangementTitle.isEmpty ? viewModel.currentArrangement.title : arrangementTitle
+        let displayTitle = hasEventTitle ? (eventTitle ?? "") : fallbackTitle
+        let finalTitle = displayTitle.isEmpty ? "New Arrangement" : displayTitle
+        let (formattedTitle, emoji) = UIHelpers.formatEventTitle(finalTitle)
+        return "\(emoji) \(formattedTitle)"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -5457,15 +5833,8 @@ struct AllTablesExportView: View {
                         HStack {
                             Spacer()
                             // Use eventTitle if available, otherwise fall back to table name
-                            let eventTitle = viewModel.currentArrangement.eventTitle
-                            let hasEventTitle = eventTitle?.isEmpty == false
-                            let fallbackTitle = arrangementTitle.isEmpty ? viewModel.currentArrangement.title : arrangementTitle
-                            let displayTitle = hasEventTitle ? eventTitle! : fallbackTitle
-                            let finalTitle = displayTitle.isEmpty ? "New Arrangement" : displayTitle
-                            let formattedResult = UIHelpers.formatEventTitle(finalTitle)
-                            let formattedTitle = formattedResult.0
-                            let emoji = formattedResult.1
-                            Text("\(emoji) \(formattedTitle)")
+                    let titleValue = composedEventTitle()
+                    Text(titleValue)
                                 .font(.title2.bold())
                                 .multilineTextAlignment(.center)
                                 .onTapGesture {
@@ -5528,12 +5897,14 @@ struct AllTablesExportView: View {
                         .font(.headline)
                         .padding(.bottom, 2) // Was 4, now 2 (move up 2px)
                     Button(action: {
-                        shareText = viewModel.exportAllTables()
+                        // Build export text and show system share sheet (no auto group chat)
+                        let text = viewModel.exportAllTables()
+                        shareText = text
                         isShowingShareSheet = true
                     }) {
-                        Label("Share as Text", systemImage: "message")
+                        Label("Share as Text", systemImage: "square.and.arrow.up")
                             .foregroundColor(.white)
-                            .padding(.vertical, 12) // Increased from 10 to 12 to meet minimum touch target
+                            .padding(.vertical, 12)
                             .padding(.horizontal, 24 + 35)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
@@ -5542,14 +5913,10 @@ struct AllTablesExportView: View {
                             .frame(maxWidth: UIScreen.main.bounds.width * 0.6 + 35)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .scaleEffect(isShowingShareSheet ? 0.97 : 1.0)
-                    .sheet(isPresented: $isShowingShareSheet, onDismiss: {
-                        // Only reset or update state after the share sheet is fully dismissed
-                        // (No resetAndShowWelcomeScreen or navigation here unless user confirms)
-                    }) {
+                    .sheet(isPresented: $isShowingShareSheet) {
                         ShareSheet(activityItems: [shareText])
                     }
-                    .padding(.bottom, 6) // Was 8, now 6 (move up 2px)
+                    .padding(.bottom, 6)
                     Button(action: { generateAndShowQRCode() }) {
                         Label("Generate QR Code", systemImage: "qrcode")
                             .foregroundColor(.blue)
@@ -5565,7 +5932,7 @@ struct AllTablesExportView: View {
                 .padding(.bottom, 18) // Was 20, now 18 (move up 2px)
                 
                 // Show only tables with people, with sequential numbering
-                ForEach(nonEmptyTables, id: \ .id) { tableId, arrangement in
+                ForEach(nonEmptyTables, id: \.id) { tableId, arrangement in
                     VStack(spacing: 16) {
                         // Combined table header, visualization, and people in one box
                         VStack(spacing: 12) {
@@ -5594,6 +5961,7 @@ struct AllTablesExportView: View {
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
                                         .truncationMode(.tail)
+                                        .padding(.bottom, 2)
                                     Button(action: {
                                         startEditingTableName(tableId: tableId, currentName: arrangement.title.isEmpty ? "Table \(tableId)" : arrangement.title)
                                     }) {
@@ -5615,7 +5983,7 @@ struct AllTablesExportView: View {
                                 arrangement: arrangement,
                                 getPersonColor: { id in personColor(for: id, in: arrangement) }
                             )
-                            .frame(height: 120)
+                            .frame(height: 140)
                             .padding(.horizontal, 16)
                             
                             // People at this table
@@ -5658,6 +6026,28 @@ struct AllTablesExportView: View {
                                         Spacer()
                                     }
                                     .padding(.horizontal, 16)
+                                     // Per-table share as text (single table)
+                                     Button(action: {
+                                         let text = viewModel.exportSingleTable(arrangement)
+                                         shareText = text
+                                         isShowingShareSheet = true
+                                     }) {
+                                         HStack(spacing: 6) {
+                                             Image(systemName: "square.and.arrow.up")
+                                             Text("Share This Table")
+                                                 .fontWeight(.semibold)
+                                         }
+                                         .font(.system(size: 14))
+                                         .padding(.vertical, 8)
+                                         .padding(.horizontal, 12)
+                                         .background(
+                                             RoundedRectangle(cornerRadius: 10)
+                                                 .fill(Color.blue.opacity(0.1))
+                                         )
+                                         .foregroundColor(.blue)
+                                     }
+                                     .padding(.horizontal, 16)
+                                     .padding(.top, 6)
                                 }
                             }
                         }
@@ -7100,11 +7490,12 @@ private struct TableCard: View {
             )
             .scaleEffect(0.72)
             .frame(height: 110)
+            .padding(.top, 8) // move table preview down a bit
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
             // Move rename (draw) control to far top-left
             .overlay(alignment: .topLeading) {
                 Button(action: onRename) {
-                    Image(systemName: "pencil")
+                    Image(systemName: "rectangle.and.pencil.and.ellipsis")
                         .font(.system(size: 16, weight: .semibold))
                         .padding(8)
                         .background(Capsule().fill(Color(.systemGray6)))
@@ -7128,10 +7519,10 @@ private struct TableCard: View {
             Text(arrangement.title.isEmpty ? "Table \(id + 1)" : arrangement.title)
                 .font(.headline)
                 .lineLimit(1)
-                .padding(.top, 8)
+                .padding(.top, 10) // move label down slightly
 
             HStack(spacing: 8) {
-                Text("\(arrangement.people.count) seated")
+                        Text("\(arrangement.people.count) seated")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 Text(arrangement.tableShape.rawValue.capitalized)

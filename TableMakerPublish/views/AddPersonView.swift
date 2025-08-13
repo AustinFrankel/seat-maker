@@ -210,32 +210,8 @@ struct AddPersonView: View {
                 }
 
                 // Bottom-anchored import actions
-                VStack(spacing: 12) {
-                    // Import from List (top)
-                    Button(action: {
-                        // Close Add Person, then open Import flow at Source step
-                        isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            importStartIntent = .text // opens Source step without auto-opening
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "text.badge.plus")
-                            Text("Import from List")
-                                .fontWeight(.semibold)
-                        }
-                        .font(.title3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 28) // slightly wider
-                        .padding(.vertical, 14) // slightly shorter height
-                        .padding(.top, 5) // move down ~5px
-                        .background(Color.blue.opacity(0.12))
-                        .cornerRadius(16)
-                    }
-                    .padding(.horizontal, -4) // expand overall width a touch more
-                    // Removed dropdown entirely; handled directly above
-
-                    // Import from contacts (bottom)
+                VStack(spacing: 10) {
+                    // Import from contacts (now first)
                     Button(action: {
                         CNContactStore().requestAccess(for: .contacts) { granted, _ in
                             DispatchQueue.main.async {
@@ -255,12 +231,36 @@ struct AddPersonView: View {
                                 .fontWeight(.semibold)
                         }
                         .font(.title3)
-                        .frame(maxWidth: .infinity)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 16)
+                        .frame(minHeight: 56)
+                        .frame(maxWidth: 320)
                         .background(Color.blue.opacity(0.12))
                         .cornerRadius(16)
                     }
+                    
+                    // Import from List (moved down, narrower)
+                    Button(action: {
+                        // Close Add Person, then open Import flow at Source step
+                        isPresented = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            importStartIntent = .text // opens Source step without auto-opening
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "text.badge.plus")
+                            Text("Import from List")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.title3)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
+                        .frame(minHeight: 56)
+                        .frame(maxWidth: 320)
+                        .background(Color.blue.opacity(0.12))
+                        .cornerRadius(16)
+                    }
+                    .padding(.top, 8)
 
                     if viewModel.isLoadingContacts {
                         ProgressView()
@@ -268,7 +268,7 @@ struct AddPersonView: View {
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 6) // ~10px lower toward the bottom
+                .padding(.bottom, 2) // ~10px lower toward the bottom
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
@@ -617,11 +617,29 @@ struct ImportFromListView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Choose a source").font(.title2).bold()
-                        Text("CSV, Google Sheets, or paste names").font(.subheadline).foregroundColor(.secondary)
+                        Text("Paste names, CSV, or Google Sheets").font(.subheadline).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
                 .padding(.horizontal)
+
+                // Text list FIRST
+                card(title: "Text list", subtitle: "") {
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $pastedText)
+                            .frame(minHeight: 260)
+                            .padding(8)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4)))
+                        if pastedText.isEmpty {
+                            Text("One name per line. You can add commas for extra fields if you have them.")
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                        }
+                    }
+                }
+
+                // CSV second
                 card(title: "CSV file", subtitle: "") {
                     HStack {
                         Button(action: { showFileImporter = true }) { Label("Choose CSV", systemImage: "doc.badge.plus") }
@@ -649,6 +667,7 @@ struct ImportFromListView: View {
                     }
                 }
 
+                // Google Sheets third
                 card(title: "Google Sheets", subtitle: "") {
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("Paste Google Sheet link", text: $googleSheetURLString)
@@ -657,21 +676,6 @@ struct ImportFromListView: View {
                     }
                 }
 
-                card(title: "Text list", subtitle: "") {
-                    ZStack(alignment: .topLeading) {
-                        TextEditor(text: $pastedText)
-                            .frame(minHeight: 260)
-                            .padding(8)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4)))
-                        if pastedText.isEmpty {
-                            Text("One name per line. You can add commas for extra fields if you have them.")
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                        }
-                    }
-                    // No hint or Use Text button; parse automatically on Continue
-                }
                 Spacer(minLength: 40)
             }
             .padding()
@@ -695,23 +699,48 @@ struct ImportFromListView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Removed explicit headers toggle; infer automatically
-                    ForEach(mapping.headerNames.dropFirst(), id: \.self) { header in
-                        HStack {
-                            Text(header).font(.subheadline)
-                            Spacer()
-                            Picker("Map to", selection: Binding(
-                                get: { mapping.mapping[header, default: headerDefault(header)] },
-                                set: { mapping.mapping[header] = $0; recomputeMappedPeople() }
-                            )) {
-                                ForEach(fieldTargets().filter { $0 != "Tag" && $0 != "Name" }, id: \.self) { target in Text(target).tag(target) }
+                    // PREVIEW FIRST (tables at top)
+                    if !previewAssignments.isEmpty || !mappedPeople.isEmpty {
+                        if computingPreview { ProgressView("Building preview...").padding(.vertical) }
+                        LazyVStack(spacing: 12) {
+                            ForEach(previewAssignments.indices, id: \.self) { idx in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    let shape = shapeForTable(index: idx)
+                                    Text("Table \(idx + 1) – \(shape.rawValue.capitalized)").font(.headline)
+                                    ForEach(previewAssignments[idx]) { person in
+                                        HStack { Text(person.name) }
+                                    }
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
                             }
-                            .pickerStyle(MenuPickerStyle())
                         }
-                        .padding(.vertical, 6)
+                        .padding(.horizontal)
+                        HStack { Spacer(); Button(action: { recomputePreview() }) { Label("Shuffle", systemImage: "shuffle") }.buttonStyle(.bordered); Spacer() }
+                            .padding(.vertical, 4)
                     }
-                    // Auto-clean enforced; tags creation disabled
-                    // Preview heading removed per request; preview shown only as tables below
+
+                    // MAPPING BELOW (optional)
+                    if !mapping.headerNames.isEmpty {
+                        Text("Map fields (optional)")
+                            .font(.headline)
+                            .padding(.top, 8)
+                        ForEach(mapping.headerNames.dropFirst(), id: \.self) { header in
+                            HStack {
+                                Text(header).font(.subheadline)
+                                Spacer()
+                                Picker("Map to", selection: Binding(
+                                    get: { mapping.mapping[header, default: headerDefault(header)] },
+                                    set: { mapping.mapping[header] = $0; recomputeMappedPeople() }
+                                )) {
+                                    ForEach(fieldTargets().filter { $0 != "Tag" && $0 != "Name" }, id: \.self) { target in Text(target).tag(target) }
+                                }
+                                .pickerStyle(MenuPickerStyle())
+                            }
+                            .padding(.vertical, 6)
+                        }
+                    }
                 }
                 .padding()
             }
@@ -722,45 +751,12 @@ struct ImportFromListView: View {
                 // Auto-generate preview right away when entering mapping
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { recomputeMappedPeople(); recomputePreview() }
             }
-            // Inline options & preview actions at bottom of mapping screen
-            if !previewAssignments.isEmpty || !mappedPeople.isEmpty {
-            VStack(spacing: 12) {
-                if computingPreview { ProgressView("Building preview...").padding() }
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(previewAssignments.indices, id: \.self) { idx in
-                            VStack(alignment: .leading, spacing: 8) {
-                                let shape = shapeForTable(index: idx)
-                                Text("Table \(idx + 1) – \(shape.rawValue.capitalized)").font(.headline)
-                                ForEach(previewAssignments[idx]) { person in
-                                    HStack { Text(person.name) }
-                                }
-                            }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                Button(action: { recomputePreview() }) { Label("Reshuffle", systemImage: "shuffle") }
-                    .buttonStyle(.bordered)
-                    .padding(.top, 4)
-            }
-                .padding(.top, 8)
-            }
         }
     }
 
     private var step4Preview: some View {
-            VStack(spacing: 0) {
-            GroupBox(label: Text("Seating logic options")) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Picker("Assignment mode", selection: $settings.assignmentMode) { ForEach(ImportAssignmentMode.allCases) { m in Text(m.rawValue).tag(m) } }.pickerStyle(SegmentedPickerStyle())
-                    Picker("Group mode", selection: $settings.groupConstraint) { ForEach(ImportGroupConstraint.allCases) { c in Text(c.rawValue).tag(c) } }.pickerStyle(SegmentedPickerStyle())
-                    Toggle("Respect VIP (one per table if possible)", isOn: .constant(true)).disabled(true)
-                }
-            }
+        VStack(spacing: 0) {
+            // PREVIEW FIRST (tables at top)
             if computingPreview { ProgressView("Building preview...").padding(.vertical, 8) }
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -784,15 +780,28 @@ struct ImportFromListView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 12)
             }
+
+            // OPTIONS BELOW (removed seating logic options as requested)
+
             HStack {
-                Button("Reshuffle") { recomputePreview() }
                 Spacer()
-                Button("Create Tables") { createTables() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(previewAssignments.isEmpty)
+                Button("Shuffle") { recomputePreview() }
+                    .buttonStyle(.bordered)
+                Spacer()
             }
-            .padding(.horizontal)
+            .padding(.vertical, 6)
             .padding(.bottom, 6)
+            .padding(.horizontal)
+            .overlay(
+                HStack {
+                    Spacer()
+                    Button("Create Tables") { createTables() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(previewAssignments.isEmpty)
+                }
+                .padding(.trailing)
+                , alignment: .topTrailing
+            )
         }
         .padding(.top, 0)
         .onAppear { if previewAssignments.isEmpty { recomputePreview() } }
@@ -807,14 +816,16 @@ struct ImportFromListView: View {
     // Actions
     private func continueTapped() {
         switch step {
-        case 1: step = 2
+        case 1:
+            step = 2
         case 2:
-            if rawRows.isEmpty && pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                sourceError = "Please choose a CSV, connect a Google Sheet, or paste a list."
-                return
-            }
+            // If user hasn't chosen CSV or Google, but did paste names (or nothing), auto-preview names on Next.
             if !pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && rawRows.isEmpty {
                 parseTextToGrid(pastedText)
+            }
+            if rawRows.isEmpty && pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // No CSV, no Google, no text -> show empty preview so they can type names on the next screen
+                rawRows = []
             }
             if mapping.headerNames.isEmpty { detectHeadersAndInitMapping() }
             // Auto-map first column to Name if no mapping exists
@@ -822,19 +833,26 @@ struct ImportFromListView: View {
                 let firstHeader = mapping.headerNames.first ?? "Column 1"
                 if mapping.mapping[firstHeader] == nil { mapping.mapping[firstHeader] = "Name" }
             }
-            // Always auto-clean names; remove UI toggle
             mapping.autoCleanNames = true
             mapping.createTagsFromExtras = false
             recomputeMappedPeople()
-            step = 3
+            // Skip Mapping step if we have only Name data; go straight to Preview
+            if mapping.headerNames.isEmpty || mapping.headerNames.count <= 1 {
+                recomputePreview()
+                step = 4
+            } else {
+                step = 3
+            }
         case 3:
+            // On mapping Next, go to Preview and show tables at the top
             guard mappedPeople.contains(where: { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
                 sourceError = "Map at least one name column."
                 return
             }
-            // Build preview inline and show actions at bottom instead of separate step
             recomputePreview()
-        default: break
+            step = 4
+        default:
+            break
         }
     }
 
@@ -852,7 +870,7 @@ struct ImportFromListView: View {
         case 1: return "Seating settings"
         case 2: return "Source"
         case 3: return "Preview"
-        case 4: return "Options & preview"
+        case 4: return "Preview"
         default: return "Import from List"
         }
     }
