@@ -548,67 +548,198 @@ struct ImportFromListView: View {
     }
 
     private var step1Settings: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                Text("Set up your tables").font(.title2).bold().frame(maxWidth: .infinity, alignment: .leading)
-                Text("Pick a shape and how many people fit at each table.")
-                    .font(.subheadline).foregroundColor(.secondary)
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Header copy
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Seating Settings").font(.title2).bold()
+                        Text("Pick a shape and how many people fit at each table.")
+                            .font(.subheadline).foregroundColor(.secondary)
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                GroupBox(label: Text("People per table")) {
-                    HStack(spacing: 12) {
-                        TextField("", text: $peoplePerTableText)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .frame(width: 80)
-                            .onChange(of: peoplePerTableText) { t in
-                                let v = Int(t) ?? settings.peoplePerTable
-                                settings.peoplePerTable = min(max(2, v), 20)
+                    // Card 1 – People per table
+                    settingsCard(title: "People per table", subtitle: "Select how many guests will sit at each table") {
+                        HStack(spacing: 16) {
+                            let buttonSize: CGFloat = 56
+                            Button(action: {
+                                let newVal = max(2, settings.peoplePerTable - 1)
+                                settings.peoplePerTable = newVal
+                                peoplePerTableText = String(newVal)
+                            }) {
+                                Image(systemName: "minus")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: buttonSize, height: buttonSize)
+                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
                             }
-                        Stepper(value: $settings.peoplePerTable, in: 2...20) { EmptyView() }
-                            .labelsHidden()
-                            .onChange(of: settings.peoplePerTable) { v in peoplePerTableText = String(v) }
+                            .buttonStyle(PlainButtonStyle())
+                            .accessibilityLabel("Decrease people per table")
+
+                            Spacer(minLength: 0)
+                            Text("\(settings.peoplePerTable)")
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
+                                .frame(minWidth: 80)
+                                .accessibilityLabel("People per table value")
+                            Spacer(minLength: 0)
+
+                            Button(action: {
+                                let newVal = min(20, settings.peoplePerTable + 1)
+                                settings.peoplePerTable = newVal
+                                peoplePerTableText = String(newVal)
+                            }) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: buttonSize, height: buttonSize)
+                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .accessibilityLabel("Increase people per table")
+                        }
+                        .padding(.vertical, 6)
                     }
+
+                    // Card 2 – Table shape
+                    settingsCard(title: "Table shape", subtitle: "Choose the shape of your tables") {
+                        HStack(spacing: 14) {
+                            shapeChoice(isSelected: settings.selectedShapes.first == .round, label: "Round") {
+                                Circle().inset(by: 4)
+                            } tap: {
+                                settings.selectedShapes = [.round]
+                            }
+                            shapeChoice(isSelected: settings.selectedShapes.first == .rectangle, label: "Rectangle") {
+                                RoundedRectangle(cornerRadius: 10).inset(by: 6)
+                            } tap: {
+                                settings.selectedShapes = [.rectangle]
+                            }
+                            shapeChoice(isSelected: settings.selectedShapes.first == .square, label: "Square") {
+                                Rectangle().inset(by: 6)
+                            } tap: {
+                                settings.selectedShapes = [.square]
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+
+                    // Card 3 – Table count
+                    settingsCard(title: "Table count", subtitle: "Choose to set the number of tables manually") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("Set manually", isOn: $settings.manualTableCountEnabled)
+                                .tint(.blue)
+                            if settings.manualTableCountEnabled {
+                                HStack(spacing: 16) {
+                                    let buttonSize: CGFloat = 56
+                                    Button(action: { settings.manualTableCount = max(1, settings.manualTableCount - 1) }) {
+                                        Image(systemName: "minus")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: buttonSize, height: buttonSize)
+                                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .accessibilityLabel("Decrease table count")
+
+                                    Spacer(minLength: 0)
+                                    Text("\(max(1, settings.manualTableCount))")
+                                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                                        .frame(minWidth: 80)
+                                    Spacer(minLength: 0)
+
+                                    Button(action: { settings.manualTableCount = min(200, settings.manualTableCount + 1) }) {
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: buttonSize, height: buttonSize)
+                                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .accessibilityLabel("Increase table count")
+                                }
+                                .padding(.top, 2)
+                            } else {
+                                HStack {
+                                    Image(systemName: "info.circle").foregroundColor(.secondary)
+                                    Text("Auto‑calculate based on people per table")
+                                        .foregroundColor(.secondary)
+                                        .font(.subheadline)
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 80)
                 }
-
-                GroupBox(label: Text("Table shape")) { shapeSelector }
-
-                GroupBox(label: Text("Table count")) {
-                    Toggle("Set manually", isOn: $settings.manualTableCountEnabled)
-                    if settings.manualTableCountEnabled {
-                        Stepper(value: $settings.manualTableCount, in: 1...200) { Text("\(settings.manualTableCount)") }
+                .padding(.horizontal)
+                .padding(.top)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                     }
                 }
             }
-            .padding()
-            // Keyboard toolbar with Done button for number input
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    }
+
+            // Sticky bottom bar
+            VStack(spacing: 0) {
+                Divider()
+                Button(action: { continueTapped() }) {
+                    Text("Next")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue))
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
                 }
+                .disabled(!(settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty))
+                .opacity((settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty) ? 1 : 0.5)
+                .background(.ultraThinMaterial)
             }
         }
     }
 
-    private var shapeSelector: some View {
-        // Use a flexible flow layout so chips don't wrap mid-word
-        HStack(spacing: 12) {
-            ContentView.TableShapeSelectorButton(shape: .round, isSelected: settings.selectedShapes.contains(.round)) {
-                if settings.selectedShapes.contains(.round) { settings.selectedShapes.removeAll { $0 == .round } } else { settings.selectedShapes.append(.round) }
-                if settings.selectedShapes.isEmpty { settings.selectedShapes = [.round] }
-            }
-            ContentView.TableShapeSelectorButton(shape: .rectangle, isSelected: settings.selectedShapes.contains(.rectangle)) {
-                if settings.selectedShapes.contains(.rectangle) { settings.selectedShapes.removeAll { $0 == .rectangle } } else { settings.selectedShapes.append(.rectangle) }
-                if settings.selectedShapes.isEmpty { settings.selectedShapes = [.rectangle] }
-            }
-            ContentView.TableShapeSelectorButton(shape: .square, isSelected: settings.selectedShapes.contains(.square)) {
-                if settings.selectedShapes.contains(.square) { settings.selectedShapes.removeAll { $0 == .square } } else { settings.selectedShapes.append(.square) }
-                if settings.selectedShapes.isEmpty { settings.selectedShapes = [.square] }
-            }
+    private var shapeSelector: some View { EmptyView() }
+
+    // Card helper
+    private func settingsCard<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline)
+            Text(subtitle).font(.footnote).foregroundColor(.secondary)
+            content()
         }
+        .padding()
+        .background(Color(.systemBackground))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(.systemGray4)))
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+    }
+
+    // Shape choice helper
+    private func shapeChoice<ShapeType: InsettableShape>(isSelected: Bool, label: String, @ViewBuilder _ shape: () -> ShapeType, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            VStack(spacing: 8) {
+                shape()
+                    .fill(isSelected ? Color.blue : Color.clear)
+                    .overlay(shape().stroke(isSelected ? Color.blue : Color.gray.opacity(0.4), lineWidth: 2))
+                    .frame(width: 72, height: 56)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(isSelected ? Color.blue.opacity(0.12) : Color(.systemBackground))
+                            .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    )
+                Text(label)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .blue : .primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(10)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(label)
     }
 
     private var step2Source: some View {
@@ -1131,4 +1262,5 @@ struct ImportFromListView: View {
 }
 
 private extension View { func eraseToAnyView() -> AnyView { AnyView(self) } }
+
 
