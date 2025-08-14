@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://seatmaker.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://seatmakerapp.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -1,15 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async redirects() {
-    return [
-      {
-        source: '/app-ads.txt',
-        destination: '/app-ads.txt',
-        permanent: true,
-      },
-    ];
-  },
   async headers() {
     return [
       {
