@@ -162,6 +162,11 @@ class SeatingViewModel: ObservableObject {
 
         // Save snapshot in history
         saveCurrentArrangement()
+
+        // Trigger interstitial/fullscreen ad after table(s) creation completes
+        DispatchQueue.main.async {
+            AdsManager.shared.showInterstitialIfReady()
+        }
     }
     
     func fetchContacts(completion: ((Bool) -> Void)? = nil) {
@@ -954,6 +959,10 @@ class SeatingViewModel: ObservableObject {
         self.currentTableName = newArrangement.title
         // Save this new table to the collection
         tableCollection.tables[id] = newArrangement
+        // Fire interstitial after creating a new table interactively
+        DispatchQueue.main.async {
+            AdsManager.shared.showInterstitialIfReady()
+        }
     }
     
     // Load all tables from user defaults
@@ -1258,6 +1267,10 @@ class SeatingViewModel: ObservableObject {
         currentArrangement = newArrangement
         currentTableName = newArrangement.title
         saveTableCollection()
+        // Show interstitial after successfully creating and switching
+        DispatchQueue.main.async {
+            AdsManager.shared.showInterstitialIfReady()
+        }
         return nextId
     }
 

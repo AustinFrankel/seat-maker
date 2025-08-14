@@ -15,13 +15,7 @@ import AppTrackingTransparency
 struct RootWithLaunch: View {
     var body: some View {
         LaunchOverlayContainer {
-            ZStack(alignment: .bottom) {
-                ContentView()
-                BannerAdView()
-                    .frame(height: 50)
-                    .background(Color.clear)
-                    .ignoresSafeArea(edges: Edge.Set.bottom)
-            }
+            ContentView()
         }
     }
 }
