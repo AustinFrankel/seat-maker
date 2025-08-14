@@ -1,1 +1,1 @@
-google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
+redirect=https://seatmaker.app/app-ads.txt
