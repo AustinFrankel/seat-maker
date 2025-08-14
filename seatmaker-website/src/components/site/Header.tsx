@@ -8,7 +8,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Moon, Sun, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { AppStoreBadge } from "@/components/site/AppStoreBadge";
-import { motion, AnimatePresence } from "framer-motion";
 
 const navItems: Array<{ href: string; label: string }> = [
   { href: "/download", label: "Download" },
@@ -21,16 +20,12 @@ const navItems: Array<{ href: string; label: string }> = [
 
 function Logo() {
   return (
-    <motion.div
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 400, damping: 10 }}
-    >
+    <div className="transition-transform duration-300 hover:scale-105 active:scale-95">
       <Link href="/download" aria-label="Seat Maker Home" className="font-semibold tracking-tight">
         <span className="text-base">Seat</span>
         <span className="text-base"> Maker</span>
       </Link>
-    </motion.div>
+    </div>
   );
 }
 
@@ -46,14 +41,9 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL || "https://apps.apple.com/us/app/seat-maker/id6748284141";
-
   return (
-    <motion.header
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className={`sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b ${
+    <header
+      className={`sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b transition-all duration-300 ${
         scrolled ? "shadow-sm" : ""
       }`}
     >
@@ -65,11 +55,10 @@ export function Header() {
               {navItems.map((item, index) => {
                 const active = pathname === item.href;
                 return (
-                  <motion.div
+                  <div
                     key={item.href}
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    className="transition-all duration-300"
+                    style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <Link
                       href={item.href}
@@ -82,47 +71,39 @@ export function Header() {
                     >
                       {item.label}
                     </Link>
-                  </motion.div>
+                  </div>
                 );
               })}
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            <motion.div 
-              className="hidden sm:inline-flex"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
+            <div 
+              className="hidden sm:inline-flex transition-all duration-500"
+              style={{ animationDelay: "300ms" }}
             >
               <AppStoreBadge />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, rotate: -180 }}
-              animate={{ opacity: 1, rotate: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
+            </div>
+            <div
+              className="transition-all duration-500"
+              style={{ animationDelay: "400ms" }}
             >
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label="Toggle theme"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="relative"
+                className="relative transition-transform duration-300 hover:rotate-12"
               >
-                <motion.div
-                  initial={false}
-                  animate={theme === "dark" ? { rotate: 180 } : { rotate: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                >
+                <div className="transition-all duration-300">
                   <Sun className="size-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                   <Moon className="size-5 absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                </motion.div>
+                </div>
                 <span className="sr-only">Toggle theme</span>
               </Button>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
+            </div>
+            <div
+              className="transition-all duration-500"
+              style={{ animationDelay: "500ms" }}
             >
               <Sheet>
                 <SheetTrigger asChild>
@@ -135,11 +116,10 @@ export function Header() {
                     {navItems.map((item, index) => {
                       const active = pathname === item.href;
                       return (
-                        <motion.div
+                        <div
                           key={item.href}
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.1 }}
+                          className="transition-all duration-300"
+                          style={{ animationDelay: `${index * 100}ms` }}
                         >
                           <Link
                             href={item.href}
@@ -152,17 +132,17 @@ export function Header() {
                           >
                             {item.label}
                           </Link>
-                        </motion.div>
+                        </div>
                       );
                     })}
                   </div>
                 </SheetContent>
               </Sheet>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
-    </motion.header>
+    </header>
   );
 }
 

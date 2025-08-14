@@ -1,7 +1,9 @@
+/* eslint-disable react/no-unescaped-entities */
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
+  description: "Seat Maker Privacy Policy - Learn how we protect your data and privacy.",
 };
 
 export default function PrivacyPage() {
