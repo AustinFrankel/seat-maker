@@ -50,6 +50,9 @@
 		F0A1B2C30100000100000006 /* LiveShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000006 /* LiveShareService.swift */; };
 		F0A1B2C30100000100000007 /* ShareLinkRouterTestShim.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */; };
 		F26EFD67C3E39413D81B66CF /* TableMakerPublishApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */; };
+		AB0000010000000000000001 /* ShareLayoutCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000001 /* ShareLayoutCoordinator.swift */; };
+		AB0000010000000000000002 /* DeflateCompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000002 /* DeflateCompression.swift */; };
+		AB0000010000000000000003 /* TableCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000003 /* TableCanvasView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -120,6 +123,9 @@
 		F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000006 /* LiveShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareService.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
+		ABF000010000000000000001 /* ShareLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLayoutCoordinator.swift; sourceTree = "<group>"; };
+		ABF000010000000000000002 /* DeflateCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeflateCompression.swift; sourceTree = "<group>"; };
+		ABF000010000000000000003 /* TableCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableCanvasView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +214,7 @@
 				28968239EC8A43123184051C /* ImagePicker.swift */,
 				DBD08D54AA775AA087D34069 /* PersonNameView.swift */,
 				D69F78B9AAA7BA5654A4EFFE /* TutorialView.swift */,
+				ABF000010000000000000003 /* TableCanvasView.swift */,
 			);
 			path = views;
 			sourceTree = "<group>";
@@ -263,6 +270,8 @@
 				F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */,
 				F0A1B2C3FEF1000100000006 /* LiveShareService.swift */,
 				F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */,
+				ABF000010000000000000001 /* ShareLayoutCoordinator.swift */,
+				ABF000010000000000000002 /* DeflateCompression.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -486,6 +495,9 @@
 				AA11BB2200CCDD3311223347 /* LaunchAnimationView.swift in Sources */,
 				AA11BB2200CCDD3311223348 /* LottieLaunchView.swift in Sources */,
 				AA11BB2200CCDD3311223350 /* LaunchIntegration.swift in Sources */,
+				AB0000010000000000000001 /* ShareLayoutCoordinator.swift in Sources */,
+				AB0000010000000000000002 /* DeflateCompression.swift in Sources */,
+				AB0000010000000000000003 /* TableCanvasView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
