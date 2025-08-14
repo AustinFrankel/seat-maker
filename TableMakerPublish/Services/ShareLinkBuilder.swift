@@ -20,7 +20,7 @@ struct ShareLinkBuilder {
     
     enum Mode: String { case snapshot, live }
     
-    static let base = "https://share.seatmaker.app/sm/share"
+    static let base = "https://www.seatmakerapp.com/t"
     
     static func buildSnapshotLink(arrangement: SeatingArrangement, hostDisplayName: String) throws -> URL {
         let docJSON = try JSONEncoder().encode(arrangement)
@@ -42,13 +42,9 @@ struct ShareLinkBuilder {
     }
     
     private static func buildURL(mode: Mode, hostDisplayName: String, blobBase64Url: String) throws -> URL {
+        // Prefer fragment-based universal link so it works even if serverless store resets.
         var comps = URLComponents(string: base)!
-        comps.queryItems = [
-            URLQueryItem(name: "v", value: "1"),
-            URLQueryItem(name: "mode", value: mode.rawValue),
-            URLQueryItem(name: "host", value: hostDisplayName),
-            URLQueryItem(name: "blob", value: blobBase64Url)
-        ]
+        comps.fragment = "v=1&mode=\(mode.rawValue)&host=\(hostDisplayName)&blob=\(blobBase64Url)"
         guard let url = comps.url else { throw URLError(.badURL) }
         return url
     }

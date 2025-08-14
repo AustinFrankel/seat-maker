@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export function GET() {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://seatmaker.app";
+  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://www.seatmakerapp.com";
   const body = `User-agent: *
 Allow: /
 Allow: /app-ads.txt

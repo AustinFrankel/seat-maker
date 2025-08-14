@@ -16,25 +16,28 @@ struct DeflateCompression {
         var result = Data()
         try data.withUnsafeBytes { (srcPtrRaw: UnsafeRawBufferPointer) in
             guard let srcPtr = srcPtrRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { throw DeflateCompressionError.failed }
-            var stream = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
-            guard compression_stream_init(&stream, operation, algorithm) != COMPRESSION_STATUS_ERROR else {
-                throw DeflateCompressionError.failed
-            }
-            defer { compression_stream_destroy(&stream) }
-            stream.src_ptr = srcPtr
-            stream.src_size = data.count
+            let destinationCapacity = destination.count
             return try destination.withUnsafeMutableBytes { (dstPtrRaw: UnsafeMutableRawBufferPointer) in
                 guard let dstPtr = dstPtrRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { throw DeflateCompressionError.failed }
-                stream.dst_ptr = dstPtr
-                stream.dst_size = destination.count
+                var stream = compression_stream(
+                    dst_ptr: dstPtr,
+                    dst_size: destinationCapacity,
+                    src_ptr: srcPtr,
+                    src_size: data.count,
+                    state: nil
+                )
+                guard compression_stream_init(&stream, operation, algorithm) != COMPRESSION_STATUS_ERROR else {
+                    throw DeflateCompressionError.failed
+                }
+                defer { compression_stream_destroy(&stream) }
                 while true {
                     let status = compression_stream_process(&stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
                     switch status {
                     case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
-                        let written = destination.count - stream.dst_size
+                        let written = destinationCapacity - stream.dst_size
                         if written > 0 { result.append(dstPtr, count: written) }
                         stream.dst_ptr = dstPtr
-                        stream.dst_size = destination.count
+                        stream.dst_size = destinationCapacity
                         if status == COMPRESSION_STATUS_END { return }
                     default:
                         throw DeflateCompressionError.failed

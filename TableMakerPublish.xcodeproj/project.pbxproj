@@ -12,6 +12,8 @@
 		0D6F333462F01A1F39E61CB9 /* SeatingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A620B1C93D98FF837AF8BBE /* SeatingViewModel.swift */; };
 		0F73DE3E380F53E2B4FBFA84 /* FAQView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C6C7D9A48ECFE86CF164EA /* FAQView.swift */; };
 		1404D7395B8DBD60828B9F59 /* ContactsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FC102067C5B9E022D6D10D /* ContactsManager.swift */; };
+		AB0000010000000000000004 /* AdsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000004 /* AdsManager.swift */; };
+		AB0000010000000000000005 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000005 /* BannerAdView.swift */; };
 		1AAA11112222333344445555 /* GuestManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAA11112222333344445554 /* GuestManagerView.swift */; };
 		42B30BC151DD545753F6E8DA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C74C9AEB03D73AF843E2C4E /* ContentView.swift */; };
 		4698189EA2B1321DED143CC2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */; };
@@ -123,6 +125,8 @@
 		F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000006 /* LiveShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareService.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
+		ABF000010000000000000004 /* AdsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdsManager.swift; sourceTree = "<group>"; };
+		ABF000010000000000000005 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
 		ABF000010000000000000001 /* ShareLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLayoutCoordinator.swift; sourceTree = "<group>"; };
 		ABF000010000000000000002 /* DeflateCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeflateCompression.swift; sourceTree = "<group>"; };
 		ABF000010000000000000003 /* TableCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableCanvasView.swift; sourceTree = "<group>"; };
@@ -201,6 +205,7 @@
 		6ADB75D5553930E159650AA2 /* views */ = {
 			isa = PBXGroup;
 			children = (
+				ABF000010000000000000005 /* BannerAdView.swift */,
 				1AAA11112222333344445554 /* GuestManagerView.swift */,
 				51035CB617B82D2E79D7B39A /* AboutMeView.swift */,
 				1486B32E4BDA11C6FC1E7968 /* AddPersonView.swift */,
@@ -263,6 +268,7 @@
 			children = (
 				20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */,
 				7A9B1C2D3E4F5061728394A5 /* NotificationService.swift */,
+				ABF000010000000000000004 /* AdsManager.swift */,
 				F0A1B2C3FEF1000100000001 /* Base64URL.swift */,
 				F0A1B2C3FEF1000100000002 /* LZFSECompression.swift */,
 				F0A1B2C3FEF1000100000003 /* ShareLinkBuilder.swift */,
@@ -498,6 +504,8 @@
 				AB0000010000000000000001 /* ShareLayoutCoordinator.swift in Sources */,
 				AB0000010000000000000002 /* DeflateCompression.swift in Sources */,
 				AB0000010000000000000003 /* TableCanvasView.swift in Sources */,
+				AB0000010000000000000004 /* AdsManager.swift in Sources */,
+				AB0000010000000000000005 /* BannerAdView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

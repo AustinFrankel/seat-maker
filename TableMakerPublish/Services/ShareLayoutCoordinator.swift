@@ -140,7 +140,7 @@ final class ShareLayoutCoordinator: ObservableObject {
     // MARK: - Private helpers
 
     private func tryServerlessPublish(snapshot: Data) async -> ShareResult? {
-        guard let endpoint = URL(string: "https://seatmakerapp.com/api/share") else { return nil }
+        guard let endpoint = URL(string: "https://www.seatmakerapp.com/api/share") else { return nil }
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -161,7 +161,7 @@ final class ShareLayoutCoordinator: ObservableObject {
         let b64 = compressed.base64URLEncodedString()
         var comps = URLComponents()
         comps.scheme = "https"
-        comps.host = "seatmakerapp.com"
+        comps.host = "www.seatmakerapp.com"
         comps.path = "/t"
         comps.fragment = "v=1&d=\(b64)"
         return comps.url!

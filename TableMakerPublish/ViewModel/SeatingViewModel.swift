@@ -959,10 +959,7 @@ class SeatingViewModel: ObservableObject {
         self.currentTableName = newArrangement.title
         // Save this new table to the collection
         tableCollection.tables[id] = newArrangement
-        // Fire interstitial after creating a new table interactively
-        DispatchQueue.main.async {
-            AdsManager.shared.showInterstitialIfReady()
-        }
+        // Do not automatically show an interstitial when silently creating the first/default table
     }
     
     // Load all tables from user defaults
@@ -1267,10 +1264,7 @@ class SeatingViewModel: ObservableObject {
         currentArrangement = newArrangement
         currentTableName = newArrangement.title
         saveTableCollection()
-        // Show interstitial after successfully creating and switching
-        DispatchQueue.main.async {
-            AdsManager.shared.showInterstitialIfReady()
-        }
+        // Optionally show ads in future, but disabled to reduce disruption.
         return nextId
     }
 

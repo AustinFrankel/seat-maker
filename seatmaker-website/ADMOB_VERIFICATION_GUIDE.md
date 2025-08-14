@@ -12,7 +12,7 @@ google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
 ## File Location
 The app-ads.txt file is located at:
 - **Local Development**: `public/app-ads.txt`
-- **Production**: `https://seatmaker.app/app-ads.txt`
+- **Production**: `https://www.seatmakerapp.com/app-ads.txt`
 
 ## Verification Steps
 
@@ -20,7 +20,7 @@ The app-ads.txt file is located at:
 ✅ **Content is correct** - The file contains the exact required text
 
 ### 2. Verify File Accessibility
-The file should be accessible at: `https://seatmaker.app/app-ads.txt`
+The file should be accessible at: `https://www.seatmakerapp.com/app-ads.txt`
 
 ### 3. Check Domain Configuration
 - **CNAME**: `seatmaker.app` ✅
@@ -40,7 +40,7 @@ The file should be accessible at: `https://seatmaker.app/app-ads.txt`
 ### 5. Testing Steps
 
 1. **Local Test**: Visit `http://localhost:3000/app-ads.txt`
-2. **Production Test**: Visit `https://seatmaker.app/app-ads.txt`
+2. **Production Test**: Visit `https://www.seatmakerapp.com/app-ads.txt`
 3. **Content Verification**: Ensure the file shows exactly:
    ```
    google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
@@ -68,7 +68,7 @@ The file should be accessible at: `https://seatmaker.app/app-ads.txt`
 curl http://localhost:3000/app-ads.txt
 
 # Check if file is accessible in production
-curl https://seatmaker.app/app-ads.txt
+curl https://www.seatmakerapp.com/app-ads.txt
 
 # Verify file content
 cat public/app-ads.txt

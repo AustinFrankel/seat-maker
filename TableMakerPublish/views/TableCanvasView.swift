@@ -39,11 +39,17 @@ struct TableCanvasView: View {
         private var tableShape: some Shape {
             switch arrangement.tableShape {
             case .round:
-                return AnyShape(Circle().path(in: CGRect(x: size.width/2 - 300, y: size.height/2 - 300, width: 600, height: 600)))
+                return AnyShape { _ in
+                    Circle().path(in: CGRect(x: size.width/2 - 300, y: size.height/2 - 300, width: 600, height: 600))
+                }
             case .rectangle:
-                return AnyShape(RoundedRectangle(cornerRadius: 28).path(in: CGRect(x: size.width/2 - 360, y: size.height/2 - 240, width: 720, height: 480)))
+                return AnyShape { _ in
+                    RoundedRectangle(cornerRadius: 28).path(in: CGRect(x: size.width/2 - 360, y: size.height/2 - 240, width: 720, height: 480))
+                }
             case .square:
-                return AnyShape(RoundedRectangle(cornerRadius: 28).path(in: CGRect(x: size.width/2 - 320, y: size.height/2 - 320, width: 640, height: 640)))
+                return AnyShape { _ in
+                    RoundedRectangle(cornerRadius: 28).path(in: CGRect(x: size.width/2 - 320, y: size.height/2 - 320, width: 640, height: 640))
+                }
             }
         }
 
@@ -53,9 +59,9 @@ struct TableCanvasView: View {
     }
 }
 
-private struct AnyShape: Shape {
-    private let builder: (CGRect) -> Path
-    init(_ path: @escaping (CGRect) -> Path) { self.builder = path }
+private struct AnyShape: Shape, Sendable {
+    private let builder: @Sendable (CGRect) -> Path
+    init(_ path: @escaping @Sendable (CGRect) -> Path) { self.builder = path }
     func path(in rect: CGRect) -> Path { builder(rect) }
 }
 

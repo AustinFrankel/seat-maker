@@ -2530,6 +2530,8 @@ struct ContentView: View {
                                 title: Text("Delete All Data?"),
                                 message: Text("This will erase all your app data from this device. This action cannot be undone."),
                                 primaryButton: .destructive(Text("Delete")) {
+                                    // Ensure ads are not shown during or immediately after a destructive delete
+                                    AdsManager.shared.suppressInterstitials(for: 60)
                                     // Erase all user data
                                     if let bundleID = Bundle.main.bundleIdentifier {
                                         UserDefaults.standard.removePersistentDomain(forName: bundleID)

@@ -1,13 +1,15 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
+type Seat = { tid: string; sid: string; x: number; y: number; n?: string };
+type Table = { id: string; kind: "round" | "rect"; cx?: number; cy?: number; r?: number; x?: number; y?: number; w?: number; h?: number; rot?: number; label?: string };
 type Snapshot = {
   v: number;
   event?: { title?: string };
   canvas: { w: number; h: number; bg?: string };
-  tables: any[];
-  seats: any[];
-  style?: any;
+  tables: Table[];
+  seats: Seat[];
+  style?: { seatFill?: string; font?: string };
 };
 
 function decodeBase64Url(input: string): Uint8Array {
@@ -22,9 +24,15 @@ function decodeBase64Url(input: string): Uint8Array {
 
 async function inflate(data: Uint8Array): Promise<Uint8Array> {
   // Use built-in DecompressionStream if available, else fallback to pako (loaded lazily)
-  if (typeof (globalThis as any).DecompressionStream !== "undefined") {
-    const ds = new (globalThis as any).DecompressionStream("deflate");
-    const stream = new Response(new Blob([data]).stream().pipeThrough(ds));
+  const g = globalThis as unknown as { DecompressionStream?: new (format: string) => TransformStream };
+  if (typeof g.DecompressionStream !== "undefined") {
+    const ds = new g.DecompressionStream!("deflate");
+    const stream = new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(data.buffer);
+        controller.close();
+      },
+    }).pipeThrough(ds));
     const buf = await stream.arrayBuffer();
     return new Uint8Array(buf);
   }
@@ -34,7 +42,7 @@ async function inflate(data: Uint8Array): Promise<Uint8Array> {
 
 async function loadSnapshot(slug?: string): Promise<Snapshot | null> {
   if (typeof window === "undefined") return null;
-  // Fragment mode
+  // Fragment mode — supports both seatmakerapp.com and www.seatmakerapp.com
   const hash = window.location.hash; // #v=1&d=...
   if (hash && hash.includes("d=")) {
     const params = new URLSearchParams(hash.slice(1));
@@ -66,25 +74,29 @@ function SVGRenderer({ doc }: { doc: Snapshot }) {
         viewBox={`0 0 ${w} ${h}`}
         style={{ background: bg || "#fff", borderRadius: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.1)" }}
       >
-        {doc.tables.map((t: any) => {
+        {doc.tables.map((t) => {
           if (t.kind === "round") {
             return <circle key={t.id} cx={t.cx} cy={t.cy} r={t.r} fill="#fff" stroke="#222" strokeWidth={6} />;
           }
+          const x = t.x ?? 0;
+          const y = t.y ?? 0;
+          const w = t.w ?? 0;
+          const h = t.h ?? 0;
           return (
-            <g key={t.id} transform={`rotate(${t.rot || 0}, ${t.x + t.w / 2}, ${t.y + t.h / 2})`}>
-              <rect x={t.x} y={t.y} width={t.w} height={t.h} rx={28} ry={28} fill="#fff" stroke="#222" strokeWidth={6} />
+            <g key={t.id} transform={`rotate(${t.rot || 0}, ${x + w / 2}, ${y + h / 2})`}>
+              <rect x={x} y={y} width={w} height={h} rx={28} ry={28} fill="#fff" stroke="#222" strokeWidth={6} />
             </g>
           );
         })}
-        {doc.seats.map((s: any, i: number) => (
+        {doc.seats.map((s) => (
           <g key={`${s.tid}-${s.sid}`}>
             <circle cx={s.x} cy={s.y} r={32} fill={doc.style?.seatFill || "#eee"} stroke="#fff" strokeWidth={4} />
           </g>
         ))}
-        {doc.tables.map((t: any) => {
+        {doc.tables.map((t) => {
           const label = t.label || "";
-          const x = t.kind === "round" ? t.cx : t.x + t.w / 2;
-          const y = t.kind === "round" ? t.cy : t.y + t.h / 2;
+          const x = t.kind === "round" ? t.cx : (t.x ?? 0) + (t.w ?? 0) / 2;
+          const y = t.kind === "round" ? t.cy : (t.y ?? 0) + (t.h ?? 0) / 2;
           return (
             <text key={`${t.id}-label`} x={x} y={y} textAnchor="middle" fontSize={48} fontFamily={doc.style?.font || "-apple-system"} fill="#000">
               {label}
@@ -115,8 +127,9 @@ export default function Viewer({ slug }: { slug?: string }) {
         const snap = await loadSnapshot(slug);
         if (!snap) return setError("notfound");
         setDoc(snap);
-      } catch (e: any) {
-        setError(e?.message || "error");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "error";
+        setError(msg);
       }
     })();
   }, [slug]);

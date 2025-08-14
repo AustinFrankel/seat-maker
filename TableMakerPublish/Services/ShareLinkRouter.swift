@@ -33,8 +33,8 @@ final class ShareLinkRouter {
             return
         }
         do {
-            // New scheme: https://seatmakerapp.com/t/{slug} or /t#v=1&d=...
-            if url.path.hasPrefix("/t") {
+            // New scheme: https://www.seatmakerapp.com/t/{slug} or /t#v=1&d=...
+            if url.path.hasPrefix("/t") || url.absoluteString.contains("/t#") {
                 if let fragment = url.fragment, fragment.contains("d=") {
                     isPresenting = true
                     let data = try ShareLayoutCoordinator.decodeFragment(fragment)
@@ -57,7 +57,7 @@ final class ShareLinkRouter {
                 }
                 return
             }
-            // Legacy flow
+            // Legacy flow via query params or fragment containing legacy params
             let payload = try parse(url: url)
             try validateBasic(payload: payload)
             switch payload.mode {

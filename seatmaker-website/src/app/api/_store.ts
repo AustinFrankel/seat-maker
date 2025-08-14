@@ -1,13 +1,13 @@
 // Simple in-memory store for serverless demo. In production, swap with KV/SQLite.
 export type StoredDoc = {
-  doc: any;
+  doc: unknown;
   createdAt: number;
   revoked: boolean;
 };
 
 const store = new Map<string, StoredDoc>();
 
-export function put(slug: string, doc: any) {
+export function put(slug: string, doc: unknown) {
   store.set(slug, { doc, createdAt: Date.now(), revoked: false });
 }
 
