@@ -16,7 +16,7 @@ struct DeflateCompression {
         var result = Data()
         try data.withUnsafeBytes { (srcPtrRaw: UnsafeRawBufferPointer) in
             guard let srcPtr = srcPtrRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { throw DeflateCompressionError.failed }
-            var stream = compression_stream()
+            var stream = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
             guard compression_stream_init(&stream, operation, algorithm) != COMPRESSION_STATUS_ERROR else {
                 throw DeflateCompressionError.failed
             }
