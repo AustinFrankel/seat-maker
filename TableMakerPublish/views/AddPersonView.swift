@@ -1410,7 +1410,7 @@ struct ImportFromListView: View {
         let assigned = previewAssignments
         guard !assigned.isEmpty else { return }
         // Capture origin before mutating ViewModel so we know whether to dismiss
-        let wasEmptyFlow = isComingFromCreateSeating
+        _ = isComingFromCreateSeating
         let shapes = (0..<assigned.count).map { shapeForTable(index: $0) }
         let namesOnly: [[String]] = assigned.map { $0.map { $0.name } }
         viewModel.createTablesFromImported(assignments: namesOnly, shapes: shapes, eventTitle: "Imported from List – \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))")
