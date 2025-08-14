@@ -20,7 +20,6 @@
 		4F222C7FD9CC454CF919B2D8 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB9B01815447D960403752E /* HistoryView.swift */; };
 		5258A7A30703E853C6517D40 /* TableMakerPublishUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 902999B9B16885096F3A5C98 /* TableMakerPublishUITests.swift */; };
 		6034A9C00F3E4E72C70B8AD8 /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69F78B9AAA7BA5654A4EFFE /* TutorialView.swift */; };
-		6AAC1456461EA09EC8EB1191 /* app-ads.txt in Resources */ = {isa = PBXBuildFile; fileRef = FDB94BBBD30680D0C09EB9ED /* app-ads.txt */; };
 		72EC50E5A1C1EF96BD098D0E /* TableSharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */; };
 		8390D836041066BF7C5451F7 /* SharedTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787200C8C43E74CCCB9BA19F /* SharedTypes.swift */; };
 		871089C56606146E16A02021 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28968239EC8A43123184051C /* ImagePicker.swift */; };
@@ -121,7 +120,6 @@
 		F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000006 /* LiveShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareService.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
-		FDB94BBBD30680D0C09EB9ED /* app-ads.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "app-ads.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -158,7 +156,6 @@
 		408F3C861C3B8FA6C5423E6F /* TableMakerPublish */ = {
 			isa = PBXGroup;
 			children = (
-				FDB94BBBD30680D0C09EB9ED /* app-ads.txt */,
 				A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */,
 				A6A739FFD3672F271B8B0A6F /* Info.plist */,
 				B3A1C2D4E5F6071890ABCDEF /* TableMakerPublish.entitlements */,
@@ -311,7 +308,7 @@
 				734460A2D3A20D8E04251406 /* Sources */,
 				84991E93F646FDB25F11B492 /* Resources */,
 				0DB1137CFAF7C706C1560AC3 /* Frameworks */,
-				BE02169A85E5BC058F226866 /* [CP] Copy Pods Resources */,
+				41BBB89DC60E9AF9CC5EC201 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -389,13 +386,29 @@
 			files = (
 				4698189EA2B1321DED143CC2 /* Assets.xcassets in Resources */,
 				46ED4874E7C174EA11507DDF /* PrivacyInfo.xcprivacy in Resources */,
-				6AAC1456461EA09EC8EB1191 /* app-ads.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		41BBB89DC60E9AF9CC5EC201 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		A395DE275E09FB3CB233BA87 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -416,23 +429,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		BE02169A85E5BC058F226866 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

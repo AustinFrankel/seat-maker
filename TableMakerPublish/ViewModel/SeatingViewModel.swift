@@ -751,6 +751,12 @@ class SeatingViewModel: ObservableObject {
         }
     }
 
+    // Bulk delete by IndexSet (for History multi-select)
+    func deleteSavedArrangements(at indexSet: IndexSet) {
+        savedArrangements.remove(atOffsets: indexSet)
+        Task { await saveToUserDefaults() }
+    }
+
     // Public method to trigger statistics refresh
     func refreshStatistics() {
         // This is just a trigger to update the UI if needed

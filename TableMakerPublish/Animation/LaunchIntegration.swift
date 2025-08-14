@@ -49,7 +49,7 @@ public struct HeroMatchedGeometry: ViewModifier {
     public var namespace: Namespace.ID?
     public func body(content: Content) -> some View {
         if let ns = namespace {
-            content.matchedGeometryEffect(id: "heroTable", in: ns)
+            content.matchedGeometryEffect(id: "heroTable", in: ns, isSource: false)
         } else {
             content
         }

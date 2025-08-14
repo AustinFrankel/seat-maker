@@ -36,8 +36,7 @@ struct EffortlessScreen: View {
             }
             
             VStack(spacing: 40) {
-                Spacer()
-                
+                Spacer(minLength: 0)
                 // Enhanced icon with animations
                 ZStack {
                     // Outer glow
@@ -50,7 +49,7 @@ struct EffortlessScreen: View {
                                 endRadius: 100
                             )
                         )
-                        .frame(width: 200, height: 200)
+                        .frame(width: 260, height: 260)
                         .scaleEffect(pulseScale)
                     
                     // Main circle
@@ -62,7 +61,7 @@ struct EffortlessScreen: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 160, height: 160)
+                        .frame(width: 190, height: 190)
                         .overlay(
                             Circle()
                                 .stroke(
@@ -78,7 +77,7 @@ struct EffortlessScreen: View {
                     
                     // Icon with rotation
                     Image(systemName: "person.3.fill")
-                        .font(.system(size: 70, weight: .light))
+                        .font(.system(size: 95, weight: .light))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [Color.blue, Color.purple],
@@ -121,9 +120,6 @@ struct EffortlessScreen: View {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         showPopup = true
                         onContinue()
-                        #if canImport(FBAudienceNetwork)
-                        InterstitialAdManager.shared.showIfReady()
-                        #endif
                     }
                 }) {
                     HStack(spacing: 12) {
@@ -157,6 +153,7 @@ struct EffortlessScreen: View {
                 
                 Spacer().frame(height: 50)
             }
+            .padding(.top, 24)
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1)) {

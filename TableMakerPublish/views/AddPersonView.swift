@@ -74,7 +74,7 @@ struct ContactsListView: View {
                     }
                 } else {
                     List {
-                        ForEach(filteredContacts, id: \.self) { contact in
+                        ForEach(Array(filteredContacts.enumerated()), id: \.offset) { _, contact in
                             Button(action: {
                                 if isMultiSelectMode {
                                     if selectedContacts.contains(contact) {
@@ -299,6 +299,8 @@ struct AddPersonView: View {
                             }
                             showingContactsPicker = false
                             isPresented = false
+                            // Ensure main screen shows the table after importing contacts
+                            NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
                         }
                     }
                 )
@@ -372,6 +374,8 @@ struct AddPersonView: View {
             viewModel.addPerson(name: newPersonName)
             DispatchQueue.main.async {
                 isPresented = false
+                // Ensure main screen shows the table after adding a person
+                NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
             }
         }
     }
@@ -458,7 +462,7 @@ enum ImportShapeRotationMode: String, CaseIterable, Identifiable {
 }
 
 struct ImportSeatingSettings {
-    var peoplePerTable: Int = 8
+    var peoplePerTable: Int = 2
     var selectedShapes: [TableShape] = [.round]
     var rotationMode: ImportShapeRotationMode = .staticOne
     var manualTableCountEnabled: Bool = false
@@ -495,6 +499,7 @@ struct ImportFromListView: View {
     @State private var googleSheetURLString: String = ""
     @State private var pastedText: String = ""
     @State private var sourceError: String? = nil
+    @State private var isProcessingSource: Bool = false
 
     @State private var rawRows: [[String]] = []
     @State private var mapping = FieldMapping()
@@ -523,12 +528,7 @@ struct ImportFromListView: View {
                         if step == 1 { isPresented = false } else { step -= 1 }
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if step < 3 {
-                        Button("Next") { continueTapped() }
-                            .disabled(step == 1 ? !(settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty) : !canContinue())
-                    }
-                }
+                // Remove top-right Next per request; rely on sticky bottom Next
             }
             .alert(isPresented: Binding(get: { sourceError != nil }, set: { if !$0 { sourceError = nil } })) {
                 Alert(title: Text("Import Error"), message: Text(sourceError ?? ""), dismissButton: .default(Text("OK")))
@@ -551,30 +551,33 @@ struct ImportFromListView: View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Header copy
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Seating Settings").font(.title2).bold()
-                        Text("Pick a shape and how many people fit at each table.")
-                            .font(.subheadline).foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     // Card 1 – People per table
-                    settingsCard(title: "People per table", subtitle: "Select how many guests will sit at each table") {
+                    settingsCard(title: "People per table", subtitle: "How many guests per table") {
+                        Text("Guests will be distributed across tables based on this number. You can adjust later.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .padding(.bottom, 4)
                         HStack(spacing: 16) {
-                            let buttonSize: CGFloat = 56
-                            Button(action: {
-                                let newVal = max(2, settings.peoplePerTable - 1)
-                                settings.peoplePerTable = newVal
-                                peoplePerTableText = String(newVal)
-                            }) {
+                            let buttonSize: CGFloat = 48
+                            RepeatButton(
+                                onTap: {
+                                    let newVal = max(2, settings.peoplePerTable - 1)
+                                    settings.peoplePerTable = newVal
+                                    peoplePerTableText = String(newVal)
+                                },
+                                onRepeat: {
+                                    let newVal = max(2, settings.peoplePerTable - 1)
+                                    settings.peoplePerTable = newVal
+                                    peoplePerTableText = String(newVal)
+                                }
+                            ) {
                                 Image(systemName: "minus")
-                                    .font(.system(size: 22, weight: .bold))
+                                    .font(.system(size: 20, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(width: buttonSize, height: buttonSize)
                                     .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
                             }
-                            .buttonStyle(PlainButtonStyle())
                             .accessibilityLabel("Decrease people per table")
 
                             Spacer(minLength: 0)
@@ -584,18 +587,24 @@ struct ImportFromListView: View {
                                 .accessibilityLabel("People per table value")
                             Spacer(minLength: 0)
 
-                            Button(action: {
-                                let newVal = min(20, settings.peoplePerTable + 1)
-                                settings.peoplePerTable = newVal
-                                peoplePerTableText = String(newVal)
-                            }) {
+                            RepeatButton(
+                                onTap: {
+                                    let newVal = min(20, settings.peoplePerTable + 1)
+                                    settings.peoplePerTable = newVal
+                                    peoplePerTableText = String(newVal)
+                                },
+                                onRepeat: {
+                                    let newVal = min(20, settings.peoplePerTable + 1)
+                                    settings.peoplePerTable = newVal
+                                    peoplePerTableText = String(newVal)
+                                }
+                            ) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 22, weight: .bold))
+                                    .font(.system(size: 20, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(width: buttonSize, height: buttonSize)
                                     .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
                             }
-                            .buttonStyle(PlainButtonStyle())
                             .accessibilityLabel("Increase people per table")
                         }
                         .padding(.vertical, 6)
@@ -604,41 +613,43 @@ struct ImportFromListView: View {
                     // Card 2 – Table shape
                     settingsCard(title: "Table shape", subtitle: "Choose the shape of your tables") {
                         HStack(spacing: 14) {
-                            shapeChoice(isSelected: settings.selectedShapes.first == .round, label: "Round") {
+                            shapeChoice(isSelected: settings.selectedShapes.first == .round, label: "Round", shapeSize: CGSize(width: 56, height: 56)) {
                                 Circle().inset(by: 4)
                             } tap: {
                                 settings.selectedShapes = [.round]
                             }
-                            shapeChoice(isSelected: settings.selectedShapes.first == .rectangle, label: "Rectangle") {
-                                RoundedRectangle(cornerRadius: 10).inset(by: 6)
-                            } tap: {
-                                settings.selectedShapes = [.rectangle]
-                            }
-                            shapeChoice(isSelected: settings.selectedShapes.first == .square, label: "Square") {
+                            shapeChoice(isSelected: settings.selectedShapes.first == .square, label: "Square", shapeSize: CGSize(width: 56, height: 56)) {
                                 Rectangle().inset(by: 6)
                             } tap: {
                                 settings.selectedShapes = [.square]
+                            }
+                            shapeChoice(isSelected: settings.selectedShapes.first == .rectangle, label: "Rectangle", shapeSize: CGSize(width: 88, height: 48)) {
+                                RoundedRectangle(cornerRadius: 10).inset(by: 6)
+                            } tap: {
+                                settings.selectedShapes = [.rectangle]
                             }
                         }
                         .padding(.top, 4)
                     }
 
                     // Card 3 – Table count
-                    settingsCard(title: "Table count", subtitle: "Choose to set the number of tables manually") {
+                    settingsCard(title: "Table count", subtitle: "") {
                         VStack(alignment: .leading, spacing: 12) {
                             Toggle("Set manually", isOn: $settings.manualTableCountEnabled)
                                 .tint(.blue)
                             if settings.manualTableCountEnabled {
                                 HStack(spacing: 16) {
-                                    let buttonSize: CGFloat = 56
-                                    Button(action: { settings.manualTableCount = max(1, settings.manualTableCount - 1) }) {
+                                    let buttonSize: CGFloat = 48
+                                    RepeatButton(
+                                        onTap: { settings.manualTableCount = max(1, settings.manualTableCount - 1) },
+                                        onRepeat: { settings.manualTableCount = max(1, settings.manualTableCount - 1) }
+                                    ) {
                                         Image(systemName: "minus")
-                                            .font(.system(size: 22, weight: .bold))
+                                            .font(.system(size: 20, weight: .bold))
                                             .foregroundColor(.white)
                                             .frame(width: buttonSize, height: buttonSize)
                                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
                                     }
-                                    .buttonStyle(PlainButtonStyle())
                                     .accessibilityLabel("Decrease table count")
 
                                     Spacer(minLength: 0)
@@ -647,14 +658,16 @@ struct ImportFromListView: View {
                                         .frame(minWidth: 80)
                                     Spacer(minLength: 0)
 
-                                    Button(action: { settings.manualTableCount = min(200, settings.manualTableCount + 1) }) {
+                                    RepeatButton(
+                                        onTap: { settings.manualTableCount = min(200, settings.manualTableCount + 1) },
+                                        onRepeat: { settings.manualTableCount = min(200, settings.manualTableCount + 1) }
+                                    ) {
                                         Image(systemName: "plus")
-                                            .font(.system(size: 22, weight: .bold))
+                                            .font(.system(size: 20, weight: .bold))
                                             .foregroundColor(.white)
                                             .frame(width: buttonSize, height: buttonSize)
                                             .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
                                     }
-                                    .buttonStyle(PlainButtonStyle())
                                     .accessibilityLabel("Increase table count")
                                 }
                                 .padding(.top, 2)
@@ -673,7 +686,7 @@ struct ImportFromListView: View {
                     Spacer(minLength: 80)
                 }
                 .padding(.horizontal)
-                .padding(.top)
+                .padding(.top, 0)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
@@ -708,7 +721,7 @@ struct ImportFromListView: View {
     private func settingsCard<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.headline)
-            Text(subtitle).font(.footnote).foregroundColor(.secondary)
+            if !subtitle.isEmpty { Text(subtitle).font(.footnote).foregroundColor(.secondary) }
             content()
         }
         .padding()
@@ -719,13 +732,13 @@ struct ImportFromListView: View {
     }
 
     // Shape choice helper
-    private func shapeChoice<ShapeType: InsettableShape>(isSelected: Bool, label: String, @ViewBuilder _ shape: () -> ShapeType, tap: @escaping () -> Void) -> some View {
+    private func shapeChoice<ShapeType: InsettableShape>(isSelected: Bool, label: String, shapeSize: CGSize = CGSize(width: 72, height: 56), @ViewBuilder _ shape: () -> ShapeType, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
             VStack(spacing: 8) {
                 shape()
                     .fill(isSelected ? Color.blue : Color.clear)
                     .overlay(shape().stroke(isSelected ? Color.blue : Color.gray.opacity(0.4), lineWidth: 2))
-                    .frame(width: 72, height: 56)
+                    .frame(width: shapeSize.width, height: shapeSize.height)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
                             .fill(isSelected ? Color.blue.opacity(0.12) : Color(.systemBackground))
@@ -743,87 +756,175 @@ struct ImportFromListView: View {
     }
 
     private var step2Source: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Choose a source").font(.title2).bold()
-                        Text("Paste names, CSV, or Google Sheets").font(.subheadline).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal)
-
-                // Text list FIRST
-                card(title: "Text list", subtitle: "") {
-                    ZStack(alignment: .topLeading) {
-                        TextEditor(text: $pastedText)
-                            .frame(minHeight: 260)
-                            .padding(8)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4)))
-                        if pastedText.isEmpty {
-                            Text("One name per line. You can add commas for extra fields if you have them.")
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Card 1 – Text List
+                    card(title: "Text List", subtitle: "Paste names, one per line") {
+                        ZStack(alignment: .topLeading) {
+                            TextEditor(text: $pastedText)
+                                .frame(minHeight: 130)
+                                .padding(10)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.systemGray4)))
+                            if pastedText.isEmpty {
+                                Text("One name per line. You can add commas for extra fields if you have them.")
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                            }
                         }
+                        .accessibilityLabel("Text list input")
                     }
-                }
 
-                // CSV second
-                card(title: "CSV file", subtitle: "") {
-                    HStack {
-                        Button(action: { showFileImporter = true }) { Label("Choose CSV", systemImage: "doc.badge.plus") }
-                        Spacer()
+                    // Card 2 – CSV File
+                    card(title: "CSV File", subtitle: "Upload a CSV file from your device") {
+                        Button(action: { showFileImporter = true }) {
+                            Text("Choose CSV")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(RoundedRectangle(cornerRadius: 14).fill(Color.green))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                }
-                .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [UTType.commaSeparatedText, UTType.text], allowsMultipleSelection: false) { result in
-                    switch result {
-                    case .success(let urls):
-                        guard let url = urls.first else { return }
-                        do {
-                            let data = try Data(contentsOf: url)
-                            if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
-                                pastedText = text
-                                parseTextToGrid(text)
-                                step = 3
-                            } else {
+                    .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [UTType.commaSeparatedText, UTType.text], allowsMultipleSelection: false) { result in
+                        switch result {
+                        case .success(let urls):
+                            guard let url = urls.first else { return }
+                            do {
+                                let data = try Data(contentsOf: url)
+                                if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                                    pastedText = text
+                                    parseTextToGrid(text)
+                                    step = 3
+                                } else {
+                                    sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                                }
+                            } catch {
                                 sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
                             }
-                        } catch {
-                            sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                        case .failure:
+                            break
                         }
-                    case .failure:
-                        break
                     }
-                }
 
-                // Google Sheets third
-                card(title: "Google Sheets", subtitle: "") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Paste Google Sheet link", text: $googleSheetURLString)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        HStack { Button(action: { fetchGoogleSheet() }) { Label("Connect Google Sheets", systemImage: "link") }; Spacer() }
+                    // Card 3 – Google Sheets
+                    card(title: "Google Sheets", subtitle: "Paste link or connect your account") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TextField("Paste Google Sheet link", text: $googleSheetURLString)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                            Button(action: { fetchGoogleSheet() }) {
+                                Text("Connect Google Sheets")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 52)
+                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
-                }
 
-                Spacer(minLength: 40)
+                    Spacer(minLength: 80)
+                }
+                .padding()
+                .allowsHitTesting(!isProcessingSource)
             }
-            .padding()
+
+            // Sticky bottom bar – Next
+            VStack(spacing: 0) {
+                Divider()
+                Button(action: { continueTapped() }) {
+                    Text("Next")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue))
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                }
+                .disabled(!canContinue() || isProcessingSource)
+                .opacity((canContinue() && !isProcessingSource) ? 1 : 0.5)
+                .background(.ultraThinMaterial)
+            }
+            if isProcessingSource {
+                VStack {
+                    ProgressView("Preparing...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemBackground)))
+                        .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.15))
+                .ignoresSafeArea()
+            }
         }
     }
 
     private func card<Content: View>(title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
-            if !subtitle.isEmpty { Text(subtitle).font(.footnote).foregroundColor(.secondary) }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                let emoji = iconEmoji(for: title)
+                if !emoji.isEmpty {
+                    Text(emoji).font(.system(size: 28))
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline).bold()
+                    if !subtitle.isEmpty { Text(subtitle).font(.subheadline).foregroundColor(.secondary) }
+                }
+                Spacer()
+            }
             content()
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(.systemGray4)))
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(.systemGray4)))
+    }
+
+    private func iconEmoji(for title: String) -> String {
+        let key = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch key {
+        case "text list": return "📝"
+        case "csv file": return "📄"
+        case "google sheets": return "📊"
+        default: return ""
+        }
+    }
+
+    // Repeat-on-hold button wrapper
+    struct RepeatButton<Label: View>: View {
+        let onTap: () -> Void
+        let onRepeat: () -> Void
+        let label: () -> Label
+        @State private var repeatTimer: Timer? = nil
+
+        var body: some View {
+            Button(action: onTap) { label() }
+                .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 30, pressing: { pressing in
+                    if pressing { startRepeating() } else { stopRepeating() }
+                }, perform: {})
+        }
+
+        private func startRepeating() {
+            if repeatTimer == nil {
+                repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+                    onRepeat()
+                }
+            }
+        }
+
+        private func stopRepeating() {
+            repeatTimer?.invalidate()
+            repeatTimer = nil
+        }
     }
 
     private var step3Mapping: some View {
@@ -912,32 +1013,44 @@ struct ImportFromListView: View {
                 .padding(.bottom, 12)
             }
 
-            // OPTIONS BELOW (removed seating logic options as requested)
+            // ACTIONS BELOW
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    // Swap order: show Shuffle first, then Create Tables
+                    Button(action: { recomputePreview() }) {
+                        Text("Shuffle")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue))
+                    }
+                    .disabled(previewAssignments.isEmpty || computingPreview)
 
-            HStack {
-                Spacer()
-                Button("Shuffle") { recomputePreview() }
-                    .buttonStyle(.bordered)
-                Spacer()
-            }
-            .padding(.vertical, 6)
-            .padding(.bottom, 6)
-            .padding(.horizontal)
-            .overlay(
-                HStack {
-                    Spacer()
-                    Button("Create Tables") { createTables() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(previewAssignments.isEmpty)
+                    Button(action: { createTables() }) {
+                        Text("Create Tables")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(RoundedRectangle(cornerRadius: 16).fill(Color.green))
+                    }
+                    .disabled(previewAssignments.isEmpty || computingPreview)
                 }
-                .padding(.trailing)
-                , alignment: .topTrailing
-            )
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+            }
         }
         .padding(.top, 0)
-        .onAppear { if previewAssignments.isEmpty { recomputePreview() } }
+        .onAppear {
+            if previewAssignments.isEmpty { recomputePreview() }
+        }
         .alert("Success", isPresented: $showSuccess) {
-            Button("OK") { isPresented = false }
+            Button("OK") {
+                isPresented = false
+            }
         } message: {
             let totals = previewAssignments.reduce(into: (tables: 0, people: 0)) { acc, arr in acc.tables += 1; acc.people += arr.count }
             Text("Tables created: \(totals.tables) tables, \(totals.people) guests.")
@@ -950,30 +1063,7 @@ struct ImportFromListView: View {
         case 1:
             step = 2
         case 2:
-            // If user hasn't chosen CSV or Google, but did paste names (or nothing), auto-preview names on Next.
-            if !pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && rawRows.isEmpty {
-                parseTextToGrid(pastedText)
-            }
-            if rawRows.isEmpty && pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                // No CSV, no Google, no text -> show empty preview so they can type names on the next screen
-                rawRows = []
-            }
-            if mapping.headerNames.isEmpty { detectHeadersAndInitMapping() }
-            // Auto-map first column to Name if no mapping exists
-            if !mapping.headerNames.isEmpty {
-                let firstHeader = mapping.headerNames.first ?? "Column 1"
-                if mapping.mapping[firstHeader] == nil { mapping.mapping[firstHeader] = "Name" }
-            }
-            mapping.autoCleanNames = true
-            mapping.createTagsFromExtras = false
-            recomputeMappedPeople()
-            // Skip Mapping step if we have only Name data; go straight to Preview
-            if mapping.headerNames.isEmpty || mapping.headerNames.count <= 1 {
-                recomputePreview()
-                step = 4
-            } else {
-                step = 3
-            }
+            processSourceAndNavigate()
         case 3:
             // On mapping Next, go to Preview and show tables at the top
             guard mappedPeople.contains(where: { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
@@ -984,6 +1074,78 @@ struct ImportFromListView: View {
             step = 4
         default:
             break
+        }
+    }
+
+    // Determine if we launched from the empty "Create seating for events" flow
+    private var isComingFromCreateSeating: Bool {
+        viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty
+    }
+
+    // Unified source processing and navigation
+    private func processSourceAndNavigate() {
+        isProcessingSource = true
+        sourceError = nil
+
+        let trimmedText = pastedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasText = !trimmedText.isEmpty
+        let hasRows = !rawRows.isEmpty
+        let hasGoogleLink = !googleSheetURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        if hasGoogleLink && !hasText && !hasRows {
+            fetchGoogleSheetForNext()
+            return
+        }
+
+        if hasText && !hasRows { parseTextToGrid(trimmedText) }
+        continueAfterParsing()
+    }
+
+    private func continueAfterParsing() {
+        if mapping.headerNames.isEmpty { detectHeadersAndInitMapping() }
+        if let firstHeader = mapping.headerNames.first, mapping.mapping[firstHeader] == nil { mapping.mapping[firstHeader] = "Name" }
+        mapping.autoCleanNames = true
+        mapping.createTagsFromExtras = false
+        recomputeMappedPeople()
+
+        if mapping.headerNames.isEmpty || mapping.headerNames.count <= 1 {
+            // Build preview first so names show instantly on next screen
+            recomputePreview {
+                isProcessingSource = false
+                if isComingFromCreateSeating {
+                    createTables()
+                    isPresented = false
+                } else {
+                    step = 4
+                }
+            }
+        } else {
+            isProcessingSource = false
+            step = 3
+        }
+    }
+
+    private func fetchGoogleSheetForNext() {
+        guard let url = URL(string: googleSheetURLString.trimmingCharacters(in: .whitespacesAndNewlines)), !googleSheetURLString.isEmpty else {
+            isProcessingSource = false
+            return
+        }
+        let exportURL: URL = transformGoogleSheetsURLToCSV(url: url) ?? url
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: exportURL)
+                if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                    pastedText = text
+                    parseTextToGrid(text)
+                    continueAfterParsing()
+                } else {
+                    sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                    isProcessingSource = false
+                }
+            } catch {
+                sourceError = "Connect to the internet to import from Google Sheets, or export the sheet as CSV."
+                isProcessingSource = false
+            }
         }
     }
 
@@ -999,7 +1161,7 @@ struct ImportFromListView: View {
     private func navigationTitleForStep(_ step: Int) -> String {
         switch step {
         case 1: return "Seating settings"
-        case 2: return "Source"
+        case 2: return "Choose a Source"
         case 3: return "Preview"
         case 4: return "Preview"
         default: return "Import from List"
@@ -1063,13 +1225,11 @@ struct ImportFromListView: View {
 
     // Mapping helpers
     private func detectHeadersAndInitMapping() {
-        DispatchQueue.main.async {
-            let first = rawRows.first ?? []
-            mapping.hasHeaders = headerLooksLikeHeaders(first)
-            mapping.headerNames = mapping.hasHeaders ? first : defaultColumnNames(count: first.count)
-            mapping.mapping = [:]
-            recomputeMappedPeople()
-        }
+        let first = rawRows.first ?? []
+        mapping.hasHeaders = headerLooksLikeHeaders(first)
+        mapping.headerNames = mapping.hasHeaders ? first : defaultColumnNames(count: first.count)
+        mapping.mapping = [:]
+        recomputeMappedPeople()
     }
 
     private func headerLooksLikeHeaders(_ firstRow: [String]) -> Bool {
@@ -1166,12 +1326,16 @@ struct ImportFromListView: View {
 
     private func titleCased(_ s: String) -> String { s.lowercased().split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ") }
 
-    private func recomputePreview() {
+    private func recomputePreview(completion: (() -> Void)? = nil) {
         guard !mappedPeople.isEmpty else { previewAssignments = []; return }
         computingPreview = true
         DispatchQueue.global(qos: .userInitiated).async {
             let tables = buildAssignments(people: mappedPeople, settings: settings)
-            DispatchQueue.main.async { self.previewAssignments = tables; self.computingPreview = false }
+            DispatchQueue.main.async {
+                self.previewAssignments = tables
+                self.computingPreview = false
+                completion?()
+            }
         }
     }
 
@@ -1245,10 +1409,15 @@ struct ImportFromListView: View {
     private func createTables() {
         let assigned = previewAssignments
         guard !assigned.isEmpty else { return }
+        // Capture origin before mutating ViewModel so we know whether to dismiss
+        let wasEmptyFlow = isComingFromCreateSeating
         let shapes = (0..<assigned.count).map { shapeForTable(index: $0) }
         let namesOnly: [[String]] = assigned.map { $0.map { $0.name } }
         viewModel.createTablesFromImported(assignments: namesOnly, shapes: shapes, eventTitle: "Imported from List – \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))")
-        showSuccess = true
+        // Ensure the main screen switches out of the empty state and shows the new tables
+        NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
+        // Always close the Import flow and show the tables immediately
+        isPresented = false
     }
 
     private func sampleCSV() -> String {

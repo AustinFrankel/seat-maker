@@ -466,6 +466,10 @@ struct ContentView: View {
             showingSettings = false
             resetAndShowWelcomeScreen()
         }
+        // When tables are created from Import From List or similar flows, force showing the main table view
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("HideEffortlessScreen"))) { _ in
+            showEffortlessScreen = false
+        }
         // React only when the hasSeenTutorial flag itself changes
         .onChange(of: hasSeenTutorial) { newValue in
             if newValue {
@@ -1823,6 +1827,7 @@ struct ContentView: View {
                     )
                 }
                 .padding(.horizontal, 0)
+                .offset(y: 4)
                 // Removed dropdown; handled directly in button action above
                 // Import from Contacts button (bottom)
                 Button(action: {
@@ -2384,21 +2389,6 @@ struct ContentView: View {
                     // Permissions Section
                     Section(header: Text("Permissions")) {
                         Text("You can manage Contacts and Photos permissions in the iOS Settings app under Seat Maker. If you deny access, you can still use the app, but some features may be limited.")
-                        #if canImport(FBAudienceNetwork)
-                        Button(action: {
-                            // Simple test to force load + present an interstitial
-                            InterstitialAdManager.shared.load()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                InterstitialAdManager.shared.showIfReady()
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "bolt.fill").foregroundColor(.blue)
-                                Text("Test Interstitial Ad")
-                            }
-                        }
-                        .accessibilityLabel("Test Interstitial Ad")
-                        #endif
                     }
 
                     // After Permissions section, before Account & Data section
@@ -3390,13 +3380,7 @@ struct ContentView: View {
         // Use a coordinator to present the ActivityView with custom items
         exportItems = items
         showExportSheet = true
-        // Trigger an interstitial before user proceeds from sharing to the create-seating screen
-        #if canImport(FBAudienceNetwork)
-        InterstitialAdManager.shared.load()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            InterstitialAdManager.shared.showIfReady()
-        }
-        #endif
+        
     }
 
     // Present a confirmation sheet with Viewer / Make Editable
@@ -4135,7 +4119,7 @@ struct ContentView: View {
                         }
                     } else {
                         List {
-                            ForEach(filteredContacts, id: \.self) { contact in
+                            ForEach(Array(filteredContacts.enumerated()), id: \.offset) { _, contact in
                                 Button(action: {
                                     if isMultiSelectMode {
                                         if selectedContacts.contains(contact) {
@@ -5842,7 +5826,7 @@ struct AllTablesExportView: View {
                                 .fill(Color.secondary.opacity(0.1))
                         )
                         .padding(.horizontal, 40)
-                        .padding(.top, 14)
+            
                     } else {
                         // The event title with edit button
                         HStack {
@@ -7495,19 +7479,23 @@ private struct TableCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Mini table preview using existing TableView for visual parity
-            ContentView.TableView(
-                arrangement: arrangement,
-                getPersonColor: { id in
-                    arrangement.people.first(where: { $0.id == id })?.color ?? .blue
-                },
-                onPersonTap: { _ in }
-            )
-            .scaleEffect(0.72)
-            .frame(height: 110)
-            .padding(.top, 8) // move table preview down a bit
+            Spacer(minLength: 0)
+            // Mini table preview centered within a fixed area so it sits visually near the card center
+            ZStack {
+                ContentView.TableView(
+                    arrangement: arrangement,
+                    getPersonColor: { id in
+                        arrangement.people.first(where: { $0.id == id })?.color ?? .blue
+                    },
+                    onPersonTap: { _ in }
+                )
+                .scaleEffect(0.68)
+                .frame(height: 110)
+                .padding(.top, 16)
+            }
+            .frame(height: 156)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
-            // Move rename (draw) control to far top-left
+            // Move controls to the top of the preview area
             .overlay(alignment: .topLeading) {
                 Button(action: onRename) {
                     Image(systemName: "rectangle.and.pencil.and.ellipsis")
@@ -7517,7 +7505,6 @@ private struct TableCard: View {
                 }
                 .padding(6)
             }
-            // Keep delete on the top-right; delete immediately
             .overlay(alignment: .topTrailing) {
                 Button(action: { onDelete() }) {
                     Image(systemName: "trash")
@@ -7528,6 +7515,7 @@ private struct TableCard: View {
                 }
                 .padding(6)
             }
+            
 
             // Push labels to the bottom of the card area
             Spacer()
@@ -7578,7 +7566,7 @@ struct ReorderTablesView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(order, id: \.self) { id in
+                ForEach(Array(order.enumerated()), id: \.offset) { _, id in
                     HStack {
                         // Remove leading drag handle icon for a cleaner row
                         Text(viewModel.tableCollection.tables[id]?.title.isEmpty == false ? (viewModel.tableCollection.tables[id]?.title ?? "Table") : "Table \(id + 1)")

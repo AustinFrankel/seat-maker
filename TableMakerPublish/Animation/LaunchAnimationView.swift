@@ -317,7 +317,7 @@ private struct ConditionalMatchedGeometry: ViewModifier {
     var namespace: Namespace.ID?
     func body(content: Content) -> some View {
         if let ns = namespace {
-            content.matchedGeometryEffect(id: "heroTable", in: ns)
+            content.matchedGeometryEffect(id: "heroTable", in: ns, isSource: true)
         } else {
             content
         }

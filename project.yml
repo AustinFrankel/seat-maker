@@ -34,7 +34,6 @@ targets:
     resources:
       - TableMakerPublish/Assets.xcassets
       - TableMakerPublish/PrivacyInfo.xcprivacy
-      - TableMakerPublish/app-ads.txt
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.austinfrankel.TableMakerPublish

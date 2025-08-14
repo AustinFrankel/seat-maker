@@ -5,7 +5,7 @@ inhibit_all_warnings!
 project 'TableMakerPublish.xcodeproj'
 
 target 'TableMakerPublish' do
-  pod 'FBAudienceNetwork'
+  pod 'Google-Mobile-Ads-SDK'
 end
 
 # Xcode 16+ sandbox blocks CocoaPods resource scripts from writing under Pods/
