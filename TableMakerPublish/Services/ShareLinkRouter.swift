@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class ShareLinkRouter {
     static let shared = ShareLinkRouter()
     private init() {}

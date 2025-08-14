@@ -167,7 +167,7 @@ final class ShareLayoutCoordinator: ObservableObject {
         return comps.url!
     }
 
-    static func decodeFragment(_ fragment: String) throws -> Data {
+    nonisolated static func decodeFragment(_ fragment: String) throws -> Data {
         // Parse v and d
         let pairs = fragment.split(separator: "&").map { $0.split(separator: "=", maxSplits: 1).map(String.init) }
         var dict: [String: String] = [:]
@@ -180,7 +180,7 @@ final class ShareLayoutCoordinator: ObservableObject {
         return raw
     }
 
-    static func fetchSnapshot(slug: String, base: URL) async throws -> Data {
+    nonisolated static func fetchSnapshot(slug: String, base: URL) async throws -> Data {
         var comps = URLComponents()
         comps.scheme = base.scheme
         comps.host = base.host
@@ -194,7 +194,7 @@ final class ShareLayoutCoordinator: ObservableObject {
         return data
     }
 
-    static func arrangement(fromSnapshot data: Data) throws -> SeatingArrangement {
+    nonisolated static func arrangement(fromSnapshot data: Data) throws -> SeatingArrangement {
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw RouterError.malformed }
         let event = (obj["event"] as? [String: Any])?["title"] as? String
         let tables = (obj["tables"] as? [[String: Any]]) ?? []
