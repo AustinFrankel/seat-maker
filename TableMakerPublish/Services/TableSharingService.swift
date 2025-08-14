@@ -6,7 +6,7 @@ class TableSharingService: ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
     
-    private let baseURL = "https://tablemaker.app/api"
+    private let baseURL = "https://seatmakerapp.com/api"
     
     func shareTable(_ arrangement: SeatingArrangement) async throws -> SharedTable {
         isLoading = true

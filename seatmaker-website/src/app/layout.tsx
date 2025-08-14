@@ -48,6 +48,7 @@ export const metadata: Metadata = {
       "Design table layouts and drag guests into seats in seconds. Offline-ready, no login, share via QR. Download now on the App Store.",
     images: ["/og.png"],
   },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

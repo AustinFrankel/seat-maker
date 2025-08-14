@@ -15,19 +15,48 @@ final class ShareLinkRouter {
         let blobBase64Url: String
     }
     
-    private let allowedHost = "share.seatmaker.app"
-    private let allowedPathPrefix = "/sm/share"
+    private let allowedHosts: Set<String> = [
+        "share.seatmaker.app",
+        "seatmakerapp.com",
+        "www.seatmakerapp.com"
+    ]
+    private let legacyPathPrefix = "/sm/share"
     private var isPresenting: Bool = false
     private var queuedURL: URL?
     
     func handleIncomingURL(_ url: URL) {
-        // Only accept our universal links
-        guard url.scheme == "https", url.host == allowedHost, url.path.hasPrefix(allowedPathPrefix) else { return }
+        // Accept legacy and new universal links
+        guard url.scheme == "https", let host = url.host, allowedHosts.contains(host) else { return }
         if isPresenting {
             queuedURL = url
             return
         }
         do {
+            // New scheme: https://seatmakerapp.com/t/{slug} or /t#v=1&d=...
+            if url.path.hasPrefix("/t") {
+                if let fragment = url.fragment, fragment.contains("d=") {
+                    isPresenting = true
+                    let data = try ShareLayoutCoordinator.decodeFragment(fragment)
+                    let arrangement = try ShareLayoutCoordinator.arrangement(fromSnapshot: data)
+                    SnapshotImporter.persistToHistory(arrangement)
+                    NotificationCenter.default.post(name: .shareLinkImportCompleted, object: nil, userInfo: ["arrangement": arrangement, "title": arrangement.title])
+                } else if url.pathComponents.count >= 2 {
+                    isPresenting = true
+                    let slug = url.lastPathComponent
+                    Task { @MainActor in
+                        do {
+                            let data = try await ShareLayoutCoordinator.fetchSnapshot(slug: slug, base: url)
+                            let arrangement = try ShareLayoutCoordinator.arrangement(fromSnapshot: data)
+                            SnapshotImporter.persistToHistory(arrangement)
+                            NotificationCenter.default.post(name: .shareLinkImportCompleted, object: nil, userInfo: ["arrangement": arrangement, "title": arrangement.title])
+                        } catch {
+                            NotificationCenter.default.post(name: .shareLinkError, object: nil, userInfo: ["message": error.localizedDescription])
+                        }
+                    }
+                }
+                return
+            }
+            // Legacy flow
             let payload = try parse(url: url)
             try validateBasic(payload: payload)
             switch payload.mode {

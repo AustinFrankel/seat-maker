@@ -1516,14 +1516,16 @@ struct ContentView: View {
         // Get comprehensive text for all tables
         let exportText = viewModel.exportAllTables()
         
+        AdsManager.shared.showInterstitialIfReady()
         let activityVC = UIActivityViewController(
             activityItems: [exportText],
             applicationActivities: nil
         )
-        
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                rootVC.present(activityVC, animated: true)
+            }
         }
         
         // In export/share completion (e.g. after showing export sheet or successful export), increment reviewPromptCount and show review prompt if needed:
@@ -3589,13 +3591,16 @@ struct ContentView: View {
                 }
                 Button(action: {
                     if let qrCode = arrangementQRCode {
+                        AdsManager.shared.showInterstitialIfReady()
                         let activityVC = UIActivityViewController(
                             activityItems: [qrCode],
                             applicationActivities: nil
                         )
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                            let rootVC = windowScene.windows.first?.rootViewController {
-                            rootVC.present(activityVC, animated: true)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                rootVC.present(activityVC, animated: true)
+                            }
                         }
                     }
                 }) {
@@ -3625,32 +3630,14 @@ struct ContentView: View {
         }
     }
     
-    // Function to generate QR code from arrangement data
+    // Function to generate QR/link using new ShareLayoutCoordinator
     private func generateQRCode() {
         let arrangement = viewModel.currentArrangement
-        DispatchQueue.global(qos: .userInitiated).async {
-            DispatchQueue.main.async { self.qrGenerationProgress = 0.2 }
-            do {
-                let url: URL
-                if self.shareModeIsLive {
-                    let sessionID = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(8).uppercased()
-                    let session = String(sessionID)
-                    // Start hosting immediately for live mode (no PIN)
-                    LiveShareService.shared.host(sessionID: session, requiresPIN: "000000") { [arrangement] in
-                        return arrangement
-                    }
-                    url = try ShareLinkBuilder.buildLiveLink(arrangementTitle: arrangement.title, sessionID: session, allowEditing: self.liveAllowEditing, hostDisplayName: self.hostDisplayName)
-                } else {
-                    url = try ShareLinkBuilder.buildSnapshotLink(arrangement: arrangement, hostDisplayName: self.hostDisplayName)
-                }
-                DispatchQueue.main.async { self.qrGenerationProgress = 0.6 }
-                self.generateQRFromDataURL(url.absoluteString)
-            } catch {
-                DispatchQueue.main.async {
-                    self.createTextBasedQRCode(from: "Seat Maker")
-                    self.qrGenerationProgress = 1.0
-                }
-            }
+        Task {
+            self.qrGenerationProgress = 0.2
+            let result = await ShareLayoutCoordinator.shared.generateShareLink(arrangement: arrangement, preferServerless: true)
+            self.qrGenerationProgress = 0.6
+            self.generateQRFromDataURL(result.viewerURL.absoluteString)
         }
     }
     
@@ -5115,16 +5102,19 @@ struct TermsView: View {
     private func shareText() {
         viewModel.saveCurrentTableState()
         let exportText = viewModel.exportAllTables()
+        AdsManager.shared.showInterstitialIfReady()
         let activityVC = UIActivityViewController(
             activityItems: [exportText],
             applicationActivities: nil
         )
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true) {
-                // After share sheet is dismissed, return to welcome
-                DispatchQueue.main.async {
-                    resetAndShowWelcomeScreen()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                rootVC.present(activityVC, animated: true) {
+                    // After share sheet is dismissed, return to welcome
+                    DispatchQueue.main.async {
+                        resetAndShowWelcomeScreen()
+                    }
                 }
             }
         }
@@ -5285,15 +5275,18 @@ struct TermsView: View {
 
     // Helper to share the export text
     private func shareExportText(_ text: String) {
+        AdsManager.shared.showInterstitialIfReady()
         let activityVC = UIActivityViewController(
             activityItems: [text],
             applicationActivities: nil
         )
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true) {
-                DispatchQueue.main.async {
-                    resetAndShowWelcomeScreen()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                rootVC.present(activityVC, animated: true) {
+                    DispatchQueue.main.async {
+                        resetAndShowWelcomeScreen()
+                    }
                 }
             }
         }
@@ -5899,7 +5892,10 @@ struct AllTablesExportView: View {
                         // Build export text and show system share sheet (no auto group chat)
                         let text = viewModel.exportAllTables()
                         shareText = text
-                        isShowingShareSheet = true
+                        AdsManager.shared.showInterstitialIfReady()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            isShowingShareSheet = true
+                        }
                     }) {
                         Label("Share as Text", systemImage: "square.and.arrow.up")
                             .foregroundColor(.white)
@@ -6029,7 +6025,10 @@ struct AllTablesExportView: View {
                                      Button(action: {
                                          let text = viewModel.exportSingleTable(arrangement)
                                          shareText = text
-                                         isShowingShareSheet = true
+                                         AdsManager.shared.showInterstitialIfReady()
+                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                             isShowingShareSheet = true
+                                         }
                                      }) {
                                          HStack(spacing: 6) {
                                              Image(systemName: "square.and.arrow.up")
@@ -6090,13 +6089,19 @@ struct AllTablesExportView: View {
             messageVC.body = exportText
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                let rootVC = windowScene.windows.first?.rootViewController {
-                rootVC.present(messageVC, animated: true)
+                AdsManager.shared.showInterstitialIfReady()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    rootVC.present(messageVC, animated: true)
+                }
             }
         } else {
+            AdsManager.shared.showInterstitialIfReady()
             let activityVC = UIActivityViewController(activityItems: [exportText], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootVC = windowScene.windows.first?.rootViewController {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    rootVC.present(activityVC, animated: true)
+                }
             }
         }
     }
