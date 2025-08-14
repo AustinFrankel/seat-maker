@@ -1,78 +1,81 @@
-# AdMob Verification Fix Guide
+# AdMob Verification Guide for Seat Maker
 
-## ✅ Issues Fixed
+## Current Status: ❌ NOT VERIFIED
+**Error**: "We couldn't verify Seat Maker (iOS)"
 
-### 1. **app-ads.txt Formatting Issues**
-- **Problem**: File contained extra blank lines and hidden characters
-- **Solution**: Created clean `app-ads.txt` with exact content:
-  ```
-  google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
-  ```
-- **Location**: `/public/app-ads.txt`
+## Required app-ads.txt Content
+Your app-ads.txt file should contain exactly:
+```
+google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
+```
 
-### 2. **Domain Mismatch Issues**
-- **Problem**: CNAME showed `app.seatmakerapp.com` but website used `seatmaker.app`
-- **Solution**: Updated CNAME to `seatmaker.app` for consistency
-- **Files Updated**: 
-  - Root `/CNAME`
-  - `/public/CNAME`
+## File Location
+The app-ads.txt file is located at:
+- **Local Development**: `public/app-ads.txt`
+- **Production**: `https://seatmaker.app/app-ads.txt`
 
-### 3. **Next.js Configuration**
-- **Added**: Proper headers for `app-ads.txt` serving
-- **Added**: Cache control to prevent stale content
-- **Added**: Content-Type specification for text files
+## Verification Steps
 
-## 🌐 Domain Configuration
+### 1. Verify File Content
+✅ **Content is correct** - The file contains the exact required text
 
-**Current Configuration:**
-- **Primary Domain**: `seatmaker.app`
-- **CNAME**: `seatmaker.app`
-- **App Store Support URL**: Should be `https://seatmaker.app`
+### 2. Verify File Accessibility
+The file should be accessible at: `https://seatmaker.app/app-ads.txt`
 
-## 📋 Next Steps for AdMob Verification
+### 3. Check Domain Configuration
+- **CNAME**: `seatmaker.app` ✅
+- **App Store Domain**: Must match exactly
 
-### 1. **Update App Store Connect**
-- Go to App Store Connect → Your App → App Information
-- Update **Support URL** to: `https://seatmaker.app`
-- Remove any `/path` or `www.` prefixes
-- Ensure it's exactly `https://seatmaker.app`
+### 4. Common Issues & Solutions
 
-### 2. **Verify File Accessibility**
-- Test: `https://seatmaker.app/app-ads.txt`
-- Should show exactly: `google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0`
-- No extra spaces, quotes, or hidden characters
+#### Issue: File not found at root domain
+**Solution**: Ensure the file is in the `public/` directory and deployed to production
 
-### 3. **DNS Configuration**
-- Ensure both `www.seatmaker.app` and `seatmaker.app` point to the same hosting
-- Both should serve the exact same `app-ads.txt` file
-- No redirects between domains
+#### Issue: Domain mismatch
+**Solution**: Verify that `seatmaker.app` is exactly what's listed in your App Store listing
 
-### 4. **Wait for Propagation**
-- DNS changes can take up to 24 hours
-- AdMob crawler may take additional time to detect changes
-- Use "Check for updates" in AdMob after making changes
+#### Issue: Caching issues
+**Solution**: Clear CDN cache and wait for propagation
 
-## 🔍 Verification Checklist
+### 5. Testing Steps
 
-- [ ] `app-ads.txt` accessible at `https://seatmaker.app/app-ads.txt`
-- [ ] File contains exactly the required line (no extra characters)
-- [ ] App Store Support URL matches exactly: `https://seatmaker.app`
-- [ ] Both www and non-www versions serve the same file
-- [ ] No redirects or SSL issues
-- [ ] File served with `text/plain` content type
+1. **Local Test**: Visit `http://localhost:3000/app-ads.txt`
+2. **Production Test**: Visit `https://seatmaker.app/app-ads.txt`
+3. **Content Verification**: Ensure the file shows exactly:
+   ```
+   google.com, pub-9106410979255644, DIRECT, f08c47fec0942fa0
+   ```
 
-## 🚨 Common Issues to Avoid
+### 6. Next Steps
 
-1. **Extra Characters**: Don't copy-paste from Word/Google Docs
-2. **Domain Mismatch**: Support URL must match hosting domain exactly
-3. **Protocol Mismatch**: Use `https://` consistently
-4. **Path Issues**: Don't include `/path` in Support URL
-5. **Caching**: Clear any CDN or browser cache
+1. **Deploy to Production**: Ensure the updated app-ads.txt is live
+2. **Wait for Propagation**: DNS changes can take up to 48 hours
+3. **Re-run Verification**: In AdMob console after deployment
+4. **Contact Support**: If issues persist after 48 hours
 
-## 📞 Support
+## Technical Details
 
-If verification still fails after following these steps:
-1. Wait 24-48 hours for propagation
-2. Check AdMob error messages for specific issues
-3. Verify file accessibility from different locations
-4. Ensure no CDN or hosting platform interference
+- **Publisher ID**: `pub-9106410979255644`
+- **Account Type**: `DIRECT`
+- **Certification Authority ID**: `f08c47fec0942fa0`
+- **File Format**: Plain text, no BOM, UTF-8 encoding
+- **Line Endings**: Unix (LF) or Windows (CRLF) - both acceptable
+
+## Troubleshooting Commands
+
+```bash
+# Check if file is accessible locally
+curl http://localhost:3000/app-ads.txt
+
+# Check if file is accessible in production
+curl https://seatmaker.app/app-ads.txt
+
+# Verify file content
+cat public/app-ads.txt
+```
+
+## Support Resources
+
+- [AdMob Help Center](https://support.google.com/admob/)
+- [IAB Tech Lab app-ads.txt Specification](https://iabtechlab.com/app-ads-txt/)
+- [Google AdMob Community](https://support.google.com/admob/community)

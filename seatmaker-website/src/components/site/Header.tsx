@@ -10,6 +10,7 @@ import { useTheme } from "next-themes";
 import { AppStoreBadge } from "@/components/site/AppStoreBadge";
 
 const navItems: Array<{ href: string; label: string }> = [
+  { href: "/", label: "Home" },
   { href: "/download", label: "Download" },
   { href: "/key-features", label: "Key Features" },
   { href: "/how-it-works", label: "How It Works" },
@@ -21,7 +22,7 @@ const navItems: Array<{ href: string; label: string }> = [
 function Logo() {
   return (
     <div className="transition-transform duration-300 hover:scale-105 active:scale-95">
-      <Link href="/download" aria-label="Seat Maker Home" className="font-semibold tracking-tight">
+      <Link href="/" aria-label="Seat Maker Home" className="font-semibold tracking-tight">
         <span className="text-base">Seat</span>
         <span className="text-base"> Maker</span>
       </Link>
