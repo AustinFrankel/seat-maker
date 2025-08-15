@@ -1,0 +1,24 @@
+{
+  "schemaVersion" : "2.0",
+  "bundleIdentifier" : "com.austinfrankel.SeatMaker1",
+  "products" : [
+    {
+      "id" : "pro",
+      "type" : "nonConsumable",
+      "referenceName" : "Pro Unlock",
+      "localizations" : [
+        { "locale" : "en_US", "displayName" : "Pro", "description" : "Unlock all features" }
+      ],
+      "prices" : [ { "currency" : "USD", "value" : 4.99 } ]
+    },
+    {
+      "id" : "remove_ads",
+      "type" : "nonConsumable",
+      "referenceName" : "Remove Ads",
+      "localizations" : [
+        { "locale" : "en_US", "displayName" : "Remove Ads", "description" : "Disable ads" }
+      ],
+      "prices" : [ { "currency" : "USD", "value" : 1.99 } ]
+    }
+  ]
+}

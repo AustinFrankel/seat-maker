@@ -10,6 +10,9 @@ import UIKit
 import UserNotifications
 import GoogleMobileAds
 import AppTrackingTransparency
+#if canImport(RevenueCat)
+import RevenueCat
+#endif
  
 // Integrate the launch overlay above home content.
 struct RootWithLaunch: View {
@@ -33,6 +36,8 @@ struct TableMakerPublishApp: App {
                     // Reset tutorial state for testing (remove in production)
                     // UserDefaults.standard.set(false, forKey: "hasSeenTutorial")
                     NotificationService.shared.configureOnLaunch()
+                    // Configure RevenueCat before Ads so entitlements are known
+                    RevenueCatManager.shared.configure()
                     AdsManager.shared.configure()
                 }
                 .onOpenURL { url in

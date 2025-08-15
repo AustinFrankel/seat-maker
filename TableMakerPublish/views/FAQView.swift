@@ -4,6 +4,7 @@ struct FAQScreenView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isAnimating = false
     @State private var selectedSection: String? = nil
+    @State private var showPaywall = false
     
     var body: some View {
         ZStack {
@@ -86,6 +87,12 @@ struct FAQScreenView: View {
             withAnimation(.easeInOut(duration: 1)) {
                 isAnimating = true
             }
+        }
+        .fullScreenCover(isPresented: $showPaywall) {
+            PaywallHost(isPresented: $showPaywall)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
+            showPaywall = true
         }
     }
     

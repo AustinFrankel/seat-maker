@@ -12,9 +12,10 @@
 		0D6F333462F01A1F39E61CB9 /* SeatingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A620B1C93D98FF837AF8BBE /* SeatingViewModel.swift */; };
 		0F73DE3E380F53E2B4FBFA84 /* FAQView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C6C7D9A48ECFE86CF164EA /* FAQView.swift */; };
 		1404D7395B8DBD60828B9F59 /* ContactsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FC102067C5B9E022D6D10D /* ContactsManager.swift */; };
-		AB0000010000000000000004 /* AdsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000004 /* AdsManager.swift */; };
-		AB0000010000000000000005 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000005 /* BannerAdView.swift */; };
 		1AAA11112222333344445555 /* GuestManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAA11112222333344445554 /* GuestManagerView.swift */; };
+		2BF3BD952E4EF30C009A4B22 /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 2BF3BD942E4EF30C009A4B22 /* ReceiptParser */; };
+		2BF3BD972E4EF30C009A4B22 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 2BF3BD962E4EF30C009A4B22 /* RevenueCat */; };
+		2BF3BD992E4EF30C009A4B22 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 2BF3BD982E4EF30C009A4B22 /* RevenueCatUI */; };
 		42B30BC151DD545753F6E8DA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C74C9AEB03D73AF843E2C4E /* ContentView.swift */; };
 		4698189EA2B1321DED143CC2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2F4A7355D5E72675AC7BD6E /* Assets.xcassets */; };
 		46ED4874E7C174EA11507DDF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EDA5DD3EE847F5FBE849BA1C /* PrivacyInfo.xcprivacy */; };
@@ -38,6 +39,11 @@
 		AA11BB2200CCDD3311223348 /* LottieLaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223349 /* LottieLaunchView.swift */; };
 		AA11BB2200CCDD3311223350 /* LaunchIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223351 /* LaunchIntegration.swift */; };
 		AA11BB2200CCDD3311223352 /* LaunchAnimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB2200CCDD3311223353 /* LaunchAnimationTests.swift */; };
+		AB0000010000000000000001 /* ShareLayoutCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000001 /* ShareLayoutCoordinator.swift */; };
+		AB0000010000000000000002 /* DeflateCompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000002 /* DeflateCompression.swift */; };
+		AB0000010000000000000003 /* TableCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000003 /* TableCanvasView.swift */; };
+		AB0000010000000000000004 /* AdsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000004 /* AdsManager.swift */; };
+		AB0000010000000000000005 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000005 /* BannerAdView.swift */; };
 		B72E95BD7B07AEA3F4E35B29 /* EffortlessScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE3776672A744FE795A2582 /* EffortlessScreen.swift */; };
 		C436D1B51B1B30C8D5095AAF /* TableMakerPublishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609D897F688F23EA187824C2 /* TableMakerPublishTests.swift */; };
 		D9F02FBFDE017C562D679E64 /* PersonNameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD08D54AA775AA087D34069 /* PersonNameView.swift */; };
@@ -52,9 +58,8 @@
 		F0A1B2C30100000100000006 /* LiveShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000006 /* LiveShareService.swift */; };
 		F0A1B2C30100000100000007 /* ShareLinkRouterTestShim.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */; };
 		F26EFD67C3E39413D81B66CF /* TableMakerPublishApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */; };
-		AB0000010000000000000001 /* ShareLayoutCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000001 /* ShareLayoutCoordinator.swift */; };
-		AB0000010000000000000002 /* DeflateCompression.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000002 /* DeflateCompression.swift */; };
-		AB0000010000000000000003 /* TableCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF000010000000000000003 /* TableCanvasView.swift */; };
+		RC2222222222222222222222 /* RevenueCatConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = RC1111111111111111111111 /* RevenueCatConfig.swift */; };
+		RC4444444444444444444444 /* PaywallHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = RC3333333333333333333333 /* PaywallHost.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,6 +110,11 @@
 		AA11BB2200CCDD3311223349 /* LottieLaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LottieLaunchView.swift; sourceTree = "<group>"; };
 		AA11BB2200CCDD3311223351 /* LaunchIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntegration.swift; sourceTree = "<group>"; };
 		AA11BB2200CCDD3311223353 /* LaunchAnimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationTests.swift; sourceTree = "<group>"; };
+		ABF000010000000000000001 /* ShareLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLayoutCoordinator.swift; sourceTree = "<group>"; };
+		ABF000010000000000000002 /* DeflateCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeflateCompression.swift; sourceTree = "<group>"; };
+		ABF000010000000000000003 /* TableCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableCanvasView.swift; sourceTree = "<group>"; };
+		ABF000010000000000000004 /* AdsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdsManager.swift; sourceTree = "<group>"; };
+		ABF000010000000000000005 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
 		AD7449B7341C2A0269C14348 /* SharedTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTable.swift; sourceTree = "<group>"; };
 		B3A1C2D4E5F6071890ABCDEF /* TableMakerPublish.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TableMakerPublish.entitlements; sourceTree = "<group>"; };
 		B9C9C92152FAA7200C4C0222 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -125,11 +135,8 @@
 		F0A1B2C3FEF1000100000005 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000006 /* LiveShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareService.swift; sourceTree = "<group>"; };
 		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
-		ABF000010000000000000004 /* AdsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdsManager.swift; sourceTree = "<group>"; };
-		ABF000010000000000000005 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
-		ABF000010000000000000001 /* ShareLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLayoutCoordinator.swift; sourceTree = "<group>"; };
-		ABF000010000000000000002 /* DeflateCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeflateCompression.swift; sourceTree = "<group>"; };
-		ABF000010000000000000003 /* TableCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableCanvasView.swift; sourceTree = "<group>"; };
+		RC1111111111111111111111 /* RevenueCatConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueCatConfig.swift; sourceTree = "<group>"; };
+		RC3333333333333333333333 /* PaywallHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallHost.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,7 +144,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2BF3BD992E4EF30C009A4B22 /* RevenueCatUI in Frameworks */,
+				2BF3BD952E4EF30C009A4B22 /* ReceiptParser in Frameworks */,
 				8D34B3F3DE1902161C32D983 /* Pods_TableMakerPublish.framework in Frameworks */,
+				2BF3BD972E4EF30C009A4B22 /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -206,6 +216,7 @@
 			isa = PBXGroup;
 			children = (
 				ABF000010000000000000005 /* BannerAdView.swift */,
+				RC3333333333333333333333 /* PaywallHost.swift */,
 				1AAA11112222333344445554 /* GuestManagerView.swift */,
 				51035CB617B82D2E79D7B39A /* AboutMeView.swift */,
 				1486B32E4BDA11C6FC1E7968 /* AddPersonView.swift */,
@@ -269,6 +280,7 @@
 				20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */,
 				7A9B1C2D3E4F5061728394A5 /* NotificationService.swift */,
 				ABF000010000000000000004 /* AdsManager.swift */,
+				RC1111111111111111111111 /* RevenueCatConfig.swift */,
 				F0A1B2C3FEF1000100000001 /* Base64URL.swift */,
 				F0A1B2C3FEF1000100000002 /* LZFSECompression.swift */,
 				F0A1B2C3FEF1000100000003 /* ShareLinkBuilder.swift */,
@@ -382,6 +394,9 @@
 			);
 			mainGroup = 5EB6F4922B1CCE486FC2EA7D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2BF3BD932E4EF30C009A4B22 /* XCRemoteSwiftPackageReference "purchases-ios" */,
+			);
 			productRefGroup = 84C63A094C5F66323CF45CDB /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -506,6 +521,8 @@
 				AB0000010000000000000003 /* TableCanvasView.swift in Sources */,
 				AB0000010000000000000004 /* AdsManager.swift in Sources */,
 				AB0000010000000000000005 /* BannerAdView.swift in Sources */,
+				RC2222222222222222222222 /* RevenueCatConfig.swift in Sources */,
+				RC4444444444444444444444 /* PaywallHost.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -554,7 +571,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.austinfrankel.TableMakerPublish;
+				PRODUCT_BUNDLE_IDENTIFIER = com.austinfrankel.SeatMaker1;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -581,7 +598,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.austinfrankel.TableMakerPublish;
+				PRODUCT_BUNDLE_IDENTIFIER = com.austinfrankel.SeatMaker1;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -830,6 +847,35 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2BF3BD932E4EF30C009A4B22 /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.35.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2BF3BD942E4EF30C009A4B22 /* ReceiptParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2BF3BD932E4EF30C009A4B22 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = ReceiptParser;
+		};
+		2BF3BD962E4EF30C009A4B22 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2BF3BD932E4EF30C009A4B22 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+		2BF3BD982E4EF30C009A4B22 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2BF3BD932E4EF30C009A4B22 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCatUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9F4D69449B836A40BDADAA90 /* Project object */;
 }

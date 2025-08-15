@@ -125,10 +125,26 @@ class SeatingViewModel: ObservableObject {
         guard !assignments.isEmpty else { return }
         // Save current table state first
         saveCurrentTableState()
-        var newTables: [Int: SeatingArrangement] = tableCollection.tables
-        var nextId = (newTables.keys.max() ?? -1) + 1
 
+        // Keep only existing tables that have people, and reindex sequentially 0..n-1
+        let existingNonEmpty = tableCollection.tables
+            .filter { !$0.value.people.isEmpty }
+            .sorted { $0.key < $1.key }
+        var rebuilt: [Int: SeatingArrangement] = [:]
+        var nextId = 0
+        for (_, table) in existingNonEmpty {
+            var t = table
+            // Ensure a non-empty title and re-sequence names like "Table X"
+            if t.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                t.title = "Table \(nextId + 1)"
+            }
+            rebuilt[nextId] = t
+            nextId += 1
+        }
+
+        // Append imported tables after the existing ones
         for (index, peopleNames) in assignments.enumerated() {
+            guard !peopleNames.isEmpty else { continue }
             let shape = shapes.isEmpty ? defaultTableShape : shapes[index % max(shapes.count, 1)]
             var arrangement = SeatingArrangement(
                 id: UUID(),
@@ -139,7 +155,6 @@ class SeatingViewModel: ObservableObject {
                 tableShape: shape,
                 seatAssignments: [:]
             )
-            // Build Person objects preserving name; tags/notes not modeled on Person except dietary/relationships/comment
             var seatIndex = 0
             for name in peopleNames {
                 let person = Person(name: name, isLocked: lockByDefault)
@@ -147,14 +162,14 @@ class SeatingViewModel: ObservableObject {
                 arrangement.seatAssignments[person.id] = seatIndex
                 seatIndex += 1
             }
-            newTables[nextId] = arrangement
+            rebuilt[nextId] = arrangement
             nextId += 1
         }
 
-        tableCollection.tables = newTables
-        tableCollection.currentTableId = max(0, (newTables.keys.min() ?? 0))
-        tableCollection.maxTableId = (newTables.keys.max() ?? 0)
-        if let current = newTables[tableCollection.currentTableId] {
+        tableCollection.tables = rebuilt
+        tableCollection.currentTableId = rebuilt.keys.sorted().first ?? 0
+        tableCollection.maxTableId = max(0, (rebuilt.keys.max() ?? 0))
+        if let current = rebuilt[tableCollection.currentTableId] {
             currentArrangement = current
             currentTableName = current.title
         }
@@ -167,6 +182,15 @@ class SeatingViewModel: ObservableObject {
         DispatchQueue.main.async {
             AdsManager.shared.showInterstitialIfReady()
         }
+    }
+
+    /// Returns true if any table with an id greater than the current table has one or more people
+    func hasPeopleInFutureTables(fromId: Int? = nil) -> Bool {
+        let currentId = fromId ?? tableCollection.currentTableId
+        for (id, table) in tableCollection.tables where id > currentId {
+            if !table.people.isEmpty { return true }
+        }
+        return false
     }
     
     func fetchContacts(completion: ((Bool) -> Void)? = nil) {
@@ -506,7 +530,7 @@ class SeatingViewModel: ObservableObject {
                 newAssignments[b] = seatA
             }
         }
-        withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
+        withAnimation(.interactiveSpring(response: 0.55, dampingFraction: 0.82, blendDuration: 0.2)) {
             currentArrangement.seatAssignments = newAssignments
             // Keep people array ordered by seat number so lists show 1., 2., ...
             currentArrangement.people.sort { a, b in

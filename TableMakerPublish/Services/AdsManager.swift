@@ -27,17 +27,37 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
         }
 
         print("[Ads] Starting Google Mobile Ads SDK")
-        #if targetEnvironment(simulator)
-        // New SDKs don't require setting a simulator test ID when using test ad unit IDs.
-        #endif
-        MobileAds.shared.start(completionHandler: { _ in
-            print("[Ads] SDK started")
+        
+        // Disable mediation to speed up initialization
+        MobileAds.shared.disableMediationInitialization()
+        
+        // Start the SDK with minimal completion handler
+        MobileAds.shared.start(completionHandler: { status in
+            print("[Ads] SDK started successfully")
         })
-        preloadInterstitial()
+        
+        // Always preload immediately after a short delay to ensure SDK is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.preloadInterstitial()
+        }
     }
 
     func preloadInterstitial() {
+        // Respect RevenueCat entitlements
+        let shouldShowAds = !RevenueCatManager.shared.state.adsDisabled
+        if !shouldShowAds {
+            interstitial = nil
+            return
+        }
+        // Avoid spamming loads if an ad is already ready
+        if interstitial != nil {
+            return
+        }
         let request = Request()
+        #if DEBUG
+        // For device testing, you can add your device hash to enable test ads.
+        // MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [ GADSimulatorID ]
+        #endif
         // Test interstitial ad unit ID from Google
         let testInterstitial = "ca-app-pub-3940256099942544/4411468910"
         print("[Ads] Loading interstitial…")
@@ -53,12 +73,22 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
     }
 
     func showInterstitialIfReady() {
+        // Do not show if user purchased remove_ads or pro
+        let shouldShowAds = !RevenueCatManager.shared.state.adsDisabled
+        if !shouldShowAds {
+            interstitial = nil
+            return
+        }
         // Do not show if temporarily suppressed (e.g., after Delete All Data or sensitive flows)
         if let until = interstitialSuppressedUntil, until > Date() {
             return
         }
         guard let presenter = Self.topMostViewController(), let interstitial = interstitial else {
             preloadInterstitial()
+            return
+        }
+        // Avoid presenting over any active modal/sheet or while not in the window hierarchy
+        if presenter.presentedViewController != nil || presenter.view.window == nil {
             return
         }
         interstitial.present(from: presenter)

@@ -239,13 +239,10 @@ struct AddPersonView: View {
                         .cornerRadius(16)
                     }
                     
-                    // Import from List (moved down, narrower)
+                    // Import from List (present as full-screen cover over this sheet)
                     Button(action: {
-                        // Close Add Person, then open Import flow at Source step
-                        isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            importStartIntent = .text // opens Source step without auto-opening
-                        }
+                        // Present Import flow immediately without dismissing this sheet
+                        importStartIntent = .text
                     }) {
                         HStack {
                             Image(systemName: "text.badge.plus")
@@ -282,8 +279,8 @@ struct AddPersonView: View {
                 }
                 .disabled(newPersonName.isEmpty)
             )
-            // Contacts picker sheet
-            .sheet(isPresented: $showingContactsPicker, onDismiss: {
+            // Contacts picker presented as full screen to avoid nested-sheet limitation
+            .fullScreenCover(isPresented: $showingContactsPicker, onDismiss: {
                 viewModel.isLoadingContacts = false
                 isPresented = false
             }) {
@@ -360,12 +357,9 @@ struct AddPersonView: View {
     
     private func addPerson() {
         guard !newPersonName.isEmpty else { return }
-        // Match main screen duplicate behavior: check across ALL tables plus current table
-        let allPeopleNames = viewModel.tableCollection.tables.values.flatMap { $0.people.map { $0.name.lowercased() } }
-        let currentTableNames = viewModel.currentArrangement.people.map { $0.name.lowercased() }
-        let allNames = Set(allPeopleNames + currentTableNames)
-        if allNames.contains(newPersonName.lowercased()) {
-            // Keep the sheet open and show a consistent alert
+        // Only prevent duplicates within the current table
+        let currentTableNames = Set(viewModel.currentArrangement.people.map { $0.name.lowercased() })
+        if currentTableNames.contains(newPersonName.lowercased()) {
             showingDuplicateAlert = true
             return
         }
@@ -508,27 +502,41 @@ struct ImportFromListView: View {
     @State private var previewAssignments: [[ImportedPersonData]] = []
     @State private var computingPreview: Bool = false
     @State private var showSuccess: Bool = false
+    @State private var hasProcessedSource: Bool = false
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                switch step {
-                case 1: step1Settings
-                case 2: step2Source
-                case 3: step3Mapping
-                case 4: step4Preview
-                default: step1Settings
+        NavigationStack {
+            ZStack {
+                if step == 1 {
+                    step1Settings
+                        .transition(.opacity)
+                } else if step == 2 {
+                    step2Source
+                        .transition(.opacity)
+                } else if step == 3 {
+                    // Mapping UI removed; keep placeholder to preserve state machine
+                    step3Mapping
+                        .transition(.opacity)
+                } else if step == 4 {
+                    step4Preview
+                        .transition(.opacity)
                 }
             }
+            .animation(.default, value: step)
             .navigationTitle(navigationTitleForStep(step))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Back") {
-                        if step == 1 { isPresented = false } else { step -= 1 }
+                        if step == 1 && hasProcessedSource {
+                            step = 2
+                        } else if step == 1 {
+                            isPresented = false
+                        } else {
+                            step -= 1
+                        }
                     }
                 }
-                // Remove top-right Next per request; rely on sticky bottom Next
             }
             .alert(isPresented: Binding(get: { sourceError != nil }, set: { if !$0 { sourceError = nil } })) {
                 Alert(title: Text("Import Error"), message: Text(sourceError ?? ""), dismissButton: .default(Text("OK")))
@@ -541,8 +549,8 @@ struct ImportFromListView: View {
         .onChange(of: settings.groupConstraint) { _ in if step == 4 { recomputePreview() } }
         .onChange(of: settings.selectedShapes) { _ in if step == 4 { recomputePreview() } }
         .onAppear {
-            // Start on Seating settings to configure table division before sourcing
-            step = 1
+            // Start at Choose Source; after processing, go to Seating Settings
+            step = 2
             peoplePerTableText = String(settings.peoplePerTable)
         }
     }
@@ -558,8 +566,8 @@ struct ImportFromListView: View {
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .padding(.bottom, 4)
-                        HStack(spacing: 16) {
-                            let buttonSize: CGFloat = 48
+                        HStack(spacing: 8) {
+                            let buttonSize: CGFloat = 36
                             RepeatButton(
                                 onTap: {
                                     let newVal = max(2, settings.peoplePerTable - 1)
@@ -638,8 +646,8 @@ struct ImportFromListView: View {
                             Toggle("Set manually", isOn: $settings.manualTableCountEnabled)
                                 .tint(.blue)
                             if settings.manualTableCountEnabled {
-                                HStack(spacing: 16) {
-                                    let buttonSize: CGFloat = 48
+                                HStack(spacing: 8) {
+                                    let buttonSize: CGFloat = 36
                                     RepeatButton(
                                         onTap: { settings.manualTableCount = max(1, settings.manualTableCount - 1) },
                                         onRepeat: { settings.manualTableCount = max(1, settings.manualTableCount - 1) }
@@ -793,16 +801,22 @@ struct ImportFromListView: View {
                         case .success(let urls):
                             guard let url = urls.first else { return }
                             do {
+                                let _ = url.startAccessingSecurityScopedResource()
+                                defer { url.stopAccessingSecurityScopedResource() }
                                 let data = try Data(contentsOf: url)
-                                if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                                if let text = decodeCSVData(data) {
                                     pastedText = text
                                     parseTextToGrid(text)
-                                    step = 3
+                                    // Prepare mapping then send user to Settings (Step 1)
+                                    detectHeadersAndInitMapping()
+                                    recomputeMappedPeople()
+                                    hasProcessedSource = true
+                                    step = 1
                                 } else {
-                                    sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                                    sourceError = "We couldn’t read that CSV. Try UTF-8/UTF-16/Windows-1252/ISO-8859-1."
                                 }
                             } catch {
-                                sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                                sourceError = "We couldn’t read that CSV. Try UTF-8/UTF-16/Windows-1252/ISO-8859-1."
                             }
                         case .failure:
                             break
@@ -928,62 +942,8 @@ struct ImportFromListView: View {
     }
 
     private var step3Mapping: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // PREVIEW FIRST (tables at top)
-                    if !previewAssignments.isEmpty || !mappedPeople.isEmpty {
-                        if computingPreview { ProgressView("Building preview...").padding(.vertical) }
-                        LazyVStack(spacing: 12) {
-                            ForEach(previewAssignments.indices, id: \.self) { idx in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    let shape = shapeForTable(index: idx)
-                                    Text("Table \(idx + 1) – \(shape.rawValue.capitalized)").font(.headline)
-                                    ForEach(previewAssignments[idx]) { person in
-                                        HStack { Text(person.name) }
-                                    }
-                                }
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
-                        }
-                        .padding(.horizontal)
-                        HStack { Spacer(); Button(action: { recomputePreview() }) { Label("Shuffle", systemImage: "shuffle") }.buttonStyle(.bordered); Spacer() }
-                            .padding(.vertical, 4)
-                    }
-
-                    // MAPPING BELOW (optional)
-                    if !mapping.headerNames.isEmpty {
-                        Text("Map fields (optional)")
-                            .font(.headline)
-                            .padding(.top, 8)
-                        ForEach(mapping.headerNames.dropFirst(), id: \.self) { header in
-                            HStack {
-                                Text(header).font(.subheadline)
-                                Spacer()
-                                Picker("Map to", selection: Binding(
-                                    get: { mapping.mapping[header, default: headerDefault(header)] },
-                                    set: { mapping.mapping[header] = $0; recomputeMappedPeople() }
-                                )) {
-                                    ForEach(fieldTargets().filter { $0 != "Tag" && $0 != "Name" }, id: \.self) { target in Text(target).tag(target) }
-                                }
-                                .pickerStyle(MenuPickerStyle())
-                            }
-                            .padding(.vertical, 6)
-                        }
-                    }
-                }
-                .padding()
-            }
-            .onAppear {
-                if mapping.headerNames.isEmpty && !rawRows.isEmpty {
-                    detectHeadersAndInitMapping()
-                }
-                // Auto-generate preview right away when entering mapping
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { recomputeMappedPeople(); recomputePreview() }
-            }
-        }
+        // Column customization removed; route around this screen in flow.
+        EmptyView()
     }
 
     private var step4Preview: some View {
@@ -1002,6 +962,10 @@ struct ImportFromListView: View {
                                     if person.vip { Text("VIP").font(.caption).padding(4).background(Color.yellow.opacity(0.3)).cornerRadius(6) }
                                     if let g = person.group, !g.isEmpty { Text(g).font(.caption).padding(4).background(Color.blue.opacity(0.15)).cornerRadius(6) }
                                 }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .contentShape(Rectangle())
+                                .transition(.opacity.combined(with: .scale))
                             }
                         }
                         .padding()
@@ -1010,6 +974,7 @@ struct ImportFromListView: View {
                     }
                 }
                 .padding(.horizontal)
+                .animation(.easeInOut(duration: 0.35), value: previewAssignments)
                 .padding(.bottom, 12)
             }
 
@@ -1044,8 +1009,9 @@ struct ImportFromListView: View {
             }
         }
         .padding(.top, 0)
-        .onAppear {
-            if previewAssignments.isEmpty { recomputePreview() }
+        .task {
+            // Always compute on first presentation; .task avoids duplicate work during transitions
+            await MainActor.run { recomputePreview() }
         }
         .alert("Success", isPresented: $showSuccess) {
             Button("OK") {
@@ -1061,17 +1027,19 @@ struct ImportFromListView: View {
     private func continueTapped() {
         switch step {
         case 1:
-            step = 2
+            if hasProcessedSource {
+                // Navigate instantly to Preview, then build
+                step = 4
+                recomputePreview()
+            } else {
+                step = 2
+            }
         case 2:
             processSourceAndNavigate()
         case 3:
-            // On mapping Next, go to Preview and show tables at the top
-            guard mappedPeople.contains(where: { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
-                sourceError = "Map at least one name column."
-                return
-            }
-            recomputePreview()
+            // Mapping screen is removed; route directly to Preview
             step = 4
+            recomputePreview()
         default:
             break
         }
@@ -1107,22 +1075,17 @@ struct ImportFromListView: View {
         mapping.autoCleanNames = true
         mapping.createTagsFromExtras = false
         recomputeMappedPeople()
+        // Auto-suggest people-per-table based on guest count
+        let total = mappedPeople.count
+        let suggested = suggestedPeoplePerTable(for: total)
+        settings.peoplePerTable = suggested
+        peoplePerTableText = String(suggested)
 
-        if mapping.headerNames.isEmpty || mapping.headerNames.count <= 1 {
-            // Build preview first so names show instantly on next screen
-            recomputePreview {
-                isProcessingSource = false
-                if isComingFromCreateSeating {
-                    createTables()
-                    isPresented = false
-                } else {
-                    step = 4
-                }
-            }
-        } else {
-            isProcessingSource = false
-            step = 3
-        }
+        // After processing source, move directly to Preview and compute so it never appears blank
+        isProcessingSource = false
+        hasProcessedSource = true
+        step = 4
+        recomputePreview()
     }
 
     private func fetchGoogleSheetForNext() {
@@ -1134,12 +1097,13 @@ struct ImportFromListView: View {
         Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: exportURL)
-                if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                if let text = decodeCSVData(data) {
                     pastedText = text
                     parseTextToGrid(text)
+                    // Jump to Preview immediately
                     continueAfterParsing()
                 } else {
-                    sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save."
+                    sourceError = "We couldn’t read that CSV. Try UTF-8/UTF-16/Windows-1252/ISO-8859-1."
                     isProcessingSource = false
                 }
             } catch {
@@ -1181,6 +1145,28 @@ struct ImportFromListView: View {
         mapping.headerNames = []
     }
 
+    // Attempt to decode CSV content across common encodings with BOM handling
+    private func decodeCSVData(_ data: Data) -> String? {
+        // Strip common BOMs
+        let utf8BOM: [UInt8] = [0xEF, 0xBB, 0xBF]
+        let utf16LEBOM: [UInt8] = [0xFF, 0xFE]
+        let utf16BEBOM: [UInt8] = [0xFE, 0xFF]
+        var content = data
+        if content.count >= 3 && Array(content.prefix(3)) == utf8BOM { content = content.dropFirst(3) }
+        if content.count >= 2 && Array(content.prefix(2)) == utf16LEBOM { content = content.dropFirst(2) }
+        if content.count >= 2 && Array(content.prefix(2)) == utf16BEBOM { content = content.dropFirst(2) }
+
+        // Try encodings in order
+        if let s = String(data: content, encoding: .utf8) { return s }
+        if let s = String(data: content, encoding: .utf16LittleEndian) { return s }
+        if let s = String(data: content, encoding: .utf16BigEndian) { return s }
+        if let s = String(data: content, encoding: .unicode) { return s }
+        if let s = String(data: content, encoding: .windowsCP1252) { return s }
+        if let s = String(data: content, encoding: .isoLatin1) { return s }
+        if let s = String(data: content, encoding: .ascii) { return s }
+        return nil
+    }
+
     private func splitCSVLine(_ line: String) -> [String] {
         var result: [String] = []
         var current = ""
@@ -1203,10 +1189,14 @@ struct ImportFromListView: View {
         Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: exportURL)
-                if let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                if let text = decodeCSVData(data) {
                     pastedText = text
                     parseTextToGrid(text)
-                    step = 3
+                    detectHeadersAndInitMapping()
+                    recomputeMappedPeople()
+                    recomputePreview() {
+                        step = 4
+                    }
                 } else { sourceError = "We couldn’t read that CSV. Try UTF-8 format or open and re-save." }
             } catch {
                 sourceError = "Connect to the internet to import from Google Sheets, or export the sheet as CSV."
@@ -1228,7 +1218,15 @@ struct ImportFromListView: View {
         let first = rawRows.first ?? []
         mapping.hasHeaders = headerLooksLikeHeaders(first)
         mapping.headerNames = mapping.hasHeaders ? first : defaultColumnNames(count: first.count)
+        // Seed sensible defaults for all headers so first-time Preview isn't blank
         mapping.mapping = [:]
+        for header in mapping.headerNames {
+            mapping.mapping[header] = headerDefault(header)
+        }
+        // Ensure at least one column is treated as Name
+        if !mapping.mapping.values.contains("Name"), let firstHeader = mapping.headerNames.first {
+            mapping.mapping[firstHeader] = "Name"
+        }
         recomputeMappedPeople()
     }
 
@@ -1327,7 +1325,13 @@ struct ImportFromListView: View {
     private func titleCased(_ s: String) -> String { s.lowercased().split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ") }
 
     private func recomputePreview(completion: (() -> Void)? = nil) {
-        guard !mappedPeople.isEmpty else { previewAssignments = []; return }
+        guard !mappedPeople.isEmpty else {
+            // Ensure we clear state and still advance caller if needed
+            previewAssignments = []
+            computingPreview = false
+            completion?()
+            return
+        }
         computingPreview = true
         DispatchQueue.global(qos: .userInitiated).async {
             let tables = buildAssignments(people: mappedPeople, settings: settings)
@@ -1349,8 +1353,8 @@ struct ImportFromListView: View {
             let manualCount = max(minTablesForCapacity, max(1, settings.manualTableCount))
             return distribute(people: people, into: manualCount, perTableLimit: 20, targetPerTable: perTableInput, settings: settings)
         }
-        // Auto: aim for 4–8 people per table
-        let targetPerTable = max(4, min(8, perTableInput))
+        // Auto: honor the chosen people-per-table value
+        let targetPerTable = perTableInput
         let autoTables = max(1, Int(ceil(Double(total) / Double(targetPerTable))))
         let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
         let tableCount = max(minTablesForCapacity, autoTables)
@@ -1418,6 +1422,21 @@ struct ImportFromListView: View {
         NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
         // Always close the Import flow and show the tables immediately
         isPresented = false
+    }
+
+    // Heuristic for autosetting people-per-table based on total guests
+    private func suggestedPeoplePerTable(for totalGuests: Int) -> Int {
+        switch totalGuests {
+        case ..<5: return 4
+        case 5...8: return 4
+        case 9...12: return 6
+        case 13...20: return 8
+        case 21...40: return 10
+        case 41...60: return 12
+        case 61...100: return 14
+        case 101...160: return 16
+        default: return 18
+        }
     }
 
     private func sampleCSV() -> String {

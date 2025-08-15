@@ -145,6 +145,18 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 }
 
+// Derive 1–2 letter initials from a full name (first + last), uppercased
+fileprivate func computeInitials(from name: String) -> String {
+    let parts = name
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .split(separator: " ")
+        .map { String($0) }
+    if parts.isEmpty { return "" }
+    let first = parts.first?.prefix(1) ?? ""
+    let last = parts.count > 1 ? (parts.last?.prefix(1) ?? "") : ""
+    return (first + last).uppercased()
+}
+
 struct ContentView: View {
     @Environment(\.showingTutorialInitially) private var showingTutorialInitially
     // Add state for profile editor
@@ -204,6 +216,7 @@ struct ContentView: View {
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @State private var isShowingShareSheet = false
     @State private var openedToast: String? = nil
+    @State private var showPaywall: Bool = false
     
     // Define unique colors for up to 12 people
     private let personColors: [Color] = [
@@ -213,6 +226,11 @@ struct ContentView: View {
     
     private var overrideColorScheme: ColorScheme? {
         isDarkMode ? .dark : .light
+    }
+    
+    // Consider the entire collection empty when all tables have zero people
+    private var isAllTablesEmpty: Bool {
+        viewModel.tableCollection.tables.values.allSatisfy { $0.people.isEmpty }
     }
     
     private func onToggleDarkMode(_ newValue: Bool) {
@@ -342,6 +360,12 @@ struct ContentView: View {
                 dismissAction: { handleHistoryDismiss() }
             )
         }
+        .fullScreenCover(isPresented: $showPaywall) {
+            PaywallHost(isPresented: $showPaywall)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
+            showPaywall = true
+        }
         .sheet(
             isPresented: Binding(
                 get: { importStartIntent != nil },
@@ -430,10 +454,14 @@ struct ContentView: View {
             if showingTutorialInitially {
                 showEffortlessScreen = true
             }
-            // Simulate loading time
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                isLoading = false
+            NotificationCenter.default.addObserver(forName: Notification.Name("HideEffortlessScreen"), object: nil, queue: .main) { _ in
+                showEffortlessScreen = false
             }
+            // If no guests exist across all tables, show the Create Seating screen on launch
+            if isAllTablesEmpty && !viewModel.isViewingHistory {
+                showEffortlessScreen = true
+            }
+            isLoading = false
             // Only show tutorial if explicitly requested, not automatically
             // This prevents tutorial from showing when user resets data
             
@@ -857,7 +885,7 @@ struct ContentView: View {
                     }
                 })
                 .edgesIgnoringSafeArea(.all)
-            } else if showEffortlessScreen || (viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0 && !viewModel.isViewingHistory) {
+            } else if showEffortlessScreen || (isAllTablesEmpty && !viewModel.isViewingHistory) {
                 // Show the empty state view (Effortless screen) if showEffortlessScreen is true,
                 // or if the table data is empty and we're not in history view
                 emptyStateView
@@ -959,7 +987,8 @@ struct ContentView: View {
                                     }
                                 } else if value.translation.width < -50 {
                                     // Left to right swipe - navigate right
-                                    if viewModel.currentArrangement.people.isEmpty {
+                                    let shouldBlock = viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables()
+                                    if shouldBlock {
                                         withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                                             withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
@@ -1000,8 +1029,9 @@ struct ContentView: View {
                             direction: .right,
                             tableShape: viewModel.currentArrangement.tableShape,
                             action: {
-                                // Block navigating to next table if current table has no guests
-                                if viewModel.currentArrangement.people.isEmpty {
+                                // Block only if current is empty AND all future tables are empty
+                                let shouldBlock = viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables()
+                                if shouldBlock {
                                     withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                                         withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
@@ -1191,11 +1221,11 @@ struct ContentView: View {
             VStack(spacing: 12) { // Less spacing
                 Button(action: { 
                     triggerHaptic(.medium)
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { 
+                    withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { 
                         viewModel.shuffleSeats()
                         // Trigger review prompt after positive action
                         maybePromptForReview()
-                    } 
+                    }
                 }) {
                     HStack(spacing: 10) {
                         Image(systemName: "dice.fill")
@@ -1443,7 +1473,7 @@ struct ContentView: View {
     // Update the actionButtons to include the Export All Tables button
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            Button(action: { triggerHaptic(.medium); withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { viewModel.shuffleSeats() } }) {
+            Button(action: { triggerHaptic(.medium); withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { viewModel.shuffleSeats() } }) {
                 HStack {
                     Image(systemName: "dice.fill")
                     Text("SHUFFLE")
@@ -1513,6 +1543,11 @@ struct ContentView: View {
     
     // Add a method to export all tables
     private func exportAllTables() {
+        // Gate export behind Pro
+        if !canUseUnlimitedFeatures() {
+            showPaywall = true
+            return
+        }
         // Get comprehensive text for all tables
         let exportText = viewModel.exportAllTables()
         
@@ -1805,7 +1840,7 @@ struct ContentView: View {
                 Spacer()
                 // Import from List (top of the two)
                 Button(action: {
-                    // Close Add Person, then open Import flow at Source step
+                    // Always allow entering the import flow. Monetization is enforced when creating tables.
                     showingAddPerson = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         importStartIntent = .text // jump to Source without auto-opening any picker
@@ -1829,29 +1864,21 @@ struct ContentView: View {
                     )
                 }
                 .padding(.horizontal, 0)
-                .offset(y: 4)
+                .offset(y: 9) // moved down by 5px
                 // Removed dropdown; handled directly in button action above
                 // Import from Contacts button (bottom)
                 Button(action: {
                     // Request contacts access *before* presenting the picker
                     CNContactStore().requestAccess(for: .contacts) { granted, error in
-                        // Ensure all UI and state updates are on the main thread
-                        DispatchQueue.main.async { 
+                        DispatchQueue.main.async {
                             if granted {
-                                // Permission granted, show the contacts picker
                                 showingContactsPicker = true
-                                // Call fetchContacts on the main actor
                                 Task { @MainActor in
                                     viewModel.fetchContacts()
-                                    // isLoadingContacts will be set to false internally by fetchContacts() on completion
                                 }
                             } else {
-                                // Permission denied
                                 permissionDeniedContacts = true
-                                // Ensure loading state is false on main thread if permission is denied
-                                DispatchQueue.main.async { 
-                                    viewModel.isLoadingContacts = false
-                                }
+                                viewModel.isLoadingContacts = false
                             }
                         }
                     }
@@ -1885,22 +1912,15 @@ struct ContentView: View {
                     Spacer()
                     Button(action: {
                         if !newPersonName.isEmpty {
-                            // Check for duplicates across ALL tables
-                            let allPeopleNames = viewModel.tableCollection.tables.values.flatMap { $0.people.map { $0.name.lowercased() } }
-                            
-                            // Also check current table if it's not yet saved
-                            let currentTableNames = viewModel.currentArrangement.people.map { $0.name.lowercased() }
-                            
-                            // Combine all names for checking
-                            let allNames = Set(allPeopleNames + currentTableNames)
-                            
-                            if allNames.contains(newPersonName.lowercased()) {
+                            // Only check duplicates within the current table for manual add
+                            let currentTableNames = Set(viewModel.currentArrangement.people.map { $0.name.lowercased() })
+                            if currentTableNames.contains(newPersonName.lowercased()) {
                                 // Do not close add person sheet, just show notification
                                 NotificationCenter.default.post(
                                     name: Notification.Name("ShowDuplicatePersonAlert"),
                                     object: nil,
                                     userInfo: [
-                                        "message": "\(newPersonName) is already seated at a table.",
+                                        "message": "\(newPersonName) is already seated at this table.",
                                         "personName": newPersonName
                                     ]
                                 )
@@ -2087,6 +2107,7 @@ struct ContentView: View {
         @Environment(\.colorScheme) var colorScheme
         @Environment(\.dismiss) var dismiss
         @Environment(\.openURL) var openURL
+        @ObservedObject private var rc = RevenueCatManager.shared
 
         // State variables for view control
         @State private var showPrivacyPolicy = false
@@ -2105,6 +2126,8 @@ struct ContentView: View {
         @State private var showAboutMe = false
         @State private var showFAQ = false
         @State private var showContactForm = false
+        @State private var showPaywall = false
+        @State private var purchaseToast: String? = nil
         
         // App Storage variables
         @AppStorage("isDarkMode") private var isDarkMode = false
@@ -2171,6 +2194,29 @@ struct ContentView: View {
         var body: some View {
             VStack(spacing: 0) {
                 Form {
+                    // Purchases Section
+                    Section(header: Text("Purchases")) {
+                        HStack {
+                            Text("Pro unlocked")
+                            Spacer()
+                            Image(systemName: rc.state.unlimitedFeatures ? "checkmark.seal.fill" : "xmark.seal")
+                                .foregroundColor(rc.state.unlimitedFeatures ? .green : .red)
+                        }
+                        HStack {
+                            Text("Ads disabled")
+                            Spacer()
+                            Image(systemName: rc.state.adsDisabled ? "checkmark.circle.fill" : "xmark.circle")
+                                .foregroundColor(rc.state.adsDisabled ? .green : .red)
+                        }
+                        Button("Upgrade to Pro") {
+                            NotificationCenter.default.post(name: .showPaywall, object: nil)
+                        }
+                        Button("Restore Purchases") {
+                            RevenueCatManager.shared.restore { result in
+                                purchaseToast = (try? result.get()) != nil ? "Restored ✅" : "Restore failed"
+                            }
+                        }
+                    }
                     // Profile Section
                     Section(header: Text("Profile")) {
                         HStack {
@@ -2641,6 +2687,12 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.primary)
                 }
+                .sheet(isPresented: $showPaywall) {
+                    PaywallHost(isPresented: $showPaywall)
+                }
+                .alert(purchaseToast ?? "", isPresented: Binding(get: { purchaseToast != nil }, set: { _ in purchaseToast = nil })) {
+                    Button("OK", role: .cancel) {}
+                }
             }
         }
         
@@ -3105,8 +3157,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: arrangement.tableShape)
-                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: arrangement.seatAssignments)
+                .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2), value: arrangement.tableShape)
+                .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2), value: arrangement.seatAssignments)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 15)
             }
@@ -3129,7 +3181,7 @@ struct ContentView: View {
                             insertion: .scale(scale: 0.8).combined(with: .opacity),
                             removal: .scale(scale: 0.8).combined(with: .opacity)
                         ))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: arrangement.tableShape)
+                        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2), value: arrangement.tableShape)
                 )
             case .rectangle:
                 let tableWidth = width * 0.95 // Increased from 0.9 to 0.95
@@ -3144,7 +3196,7 @@ struct ContentView: View {
                             insertion: .scale(scale: 0.8).combined(with: .opacity),
                             removal: .scale(scale: 0.8).combined(with: .opacity)
                         ))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: arrangement.tableShape)
+                        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2), value: arrangement.tableShape)
                 )
             case .square:
                 let side = min(width, height) * 0.9
@@ -3158,7 +3210,7 @@ struct ContentView: View {
                             insertion: .scale(scale: 0.8).combined(with: .opacity),
                             removal: .scale(scale: 0.8).combined(with: .opacity)
                         ))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: arrangement.tableShape)
+                        .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2), value: arrangement.tableShape)
                 )
             }
         }
@@ -3244,7 +3296,7 @@ struct ContentView: View {
                                     .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
                             } else {
-                                Text(String(person.name.prefix(1)))
+                                Text(computeInitials(from: person.name))
                                     .font(.system(size: iconSize * 0.45, weight: .bold))
                                     .foregroundColor(color)
                                     .frame(width: iconSize - 4, height: iconSize - 4)
@@ -3347,8 +3399,8 @@ struct ContentView: View {
                                     .fill(getPersonColor(for: person.id, in: viewModel.currentArrangement).opacity(0.3))
                                     .frame(width: 30, height: 30)
                                     .overlay(
-                                        Text(String(person.name.prefix(1)))
-                                            .font(.system(size: 14, weight: .semibold))
+                                        Text(computeInitials(from: person.name))
+                                            .font(.system(size: 12, weight: .semibold))
                                             .foregroundColor(getPersonColor(for: person.id, in: viewModel.currentArrangement))
                                     )
                                 
@@ -3617,7 +3669,18 @@ struct ContentView: View {
                 .padding(.bottom, 8)
             }
             .navigationBarTitle("QR Code", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Done") {
+            .navigationBarItems(
+                leading: Button(action: {
+                    // Back: simply dismiss the QR screen without resetting state
+                    viewModel.showingQRCodeSheet = false
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Back")
+                    }
+                },
+                trailing: Button("Done") {
                 showingQRCodeSheet = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     if shareModeIsLive {
@@ -4918,7 +4981,7 @@ struct TermsView: View {
                                     )
                                     .shadow(radius: 3)
                             } else {
-                                Text(String(editingPersonName.prefix(1)))
+                                Text(computeInitials(from: editingPersonName))
                                     .font(.system(size: 60, weight: .semibold))
                                     .foregroundColor(selectedProfileColor)
                                     .frame(width: 120, height: 120)
@@ -5000,10 +5063,10 @@ struct TermsView: View {
                                                 .frame(width: 15, height: 15)
                                         }
                                         
-                                        // Always show the initial letter
+                                        // Always show initials
                                         if !editingPersonName.isEmpty {
-                                            Text(String(editingPersonName.prefix(1)))
-                                                .font(.system(size: 24, weight: .semibold))
+                                            Text(computeInitials(from: editingPersonName))
+                                                .font(.system(size: 20, weight: .semibold))
                                                 .foregroundColor(.white)
                                         }
                                     }
@@ -5102,6 +5165,11 @@ struct TermsView: View {
     
     // Function to share as text - with improved format for tables
     private func shareText() {
+        // Gate share/export behind Pro
+        if !canUseUnlimitedFeatures() {
+            showPaywall = true
+            return
+        }
         viewModel.saveCurrentTableState()
         let exportText = viewModel.exportAllTables()
         AdsManager.shared.showInterstitialIfReady()
@@ -5124,6 +5192,11 @@ struct TermsView: View {
     
     // Function to share as image
     private func shareImage() {
+        // Gate image export behind Pro
+        if !canUseUnlimitedFeatures() {
+            showPaywall = true
+            return
+        }
         let (formattedTitle, eventEmoji) = UIHelpers.formatEventTitle(viewModel.currentArrangement.title)
         let renderer = ImageRenderer(content:
             VStack(spacing: 12) {
@@ -5200,8 +5273,8 @@ struct TermsView: View {
                                     .fill(getPersonColor(for: person.id, in: viewModel.currentArrangement).opacity(0.3))
                                     .frame(width: 30, height: 30)
                                     .overlay(
-                                        Text(String(person.name.prefix(1)))
-                                            .font(.system(size: 14, weight: .semibold))
+                                        Text(computeInitials(from: person.name))
+                                            .font(.system(size: 12, weight: .semibold))
                                             .foregroundColor(getPersonColor(for: person.id, in: viewModel.currentArrangement))
                                     )
                                 
@@ -5438,6 +5511,9 @@ struct TermsView: View {
         if !viewModel.isViewingHistory {
             // Respect origin: if coming from create seating, keep effortless screen
             showEffortlessScreen = true
+        } else {
+            // When a history item was opened, go directly to the main table view
+            showEffortlessScreen = false
         }
         // Clear snapshot when dismissing
         historyOriginSnapshot = nil
@@ -5677,7 +5753,7 @@ struct AllTablesExportView: View {
                         }
                     }
                     // Place people around the perimeter
-                    ForEach(Array(arrangement.people.enumerated()), id: \ .element.id) { index, person in
+                    ForEach(Array(arrangement.people.enumerated()), id: \.element.id) { index, person in
                         let pos = calculatePersonPosition(
                             index: index,
                             total: arrangement.people.count,
@@ -5689,8 +5765,8 @@ struct AllTablesExportView: View {
                             Circle()
                                 .fill(getPersonColor(person.id).opacity(0.7))
                                 .frame(width: 24, height: 24)
-                            Text(String(person.name.prefix(1)))
-                                .font(.system(size: 13, weight: .bold))
+                            Text(computeInitials(from: person.name))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .position(x: pos.x, y: pos.y)
@@ -5767,7 +5843,7 @@ struct AllTablesExportView: View {
                     .fill(color.opacity(0.2))
                     .frame(width: 30, height: 30)
                 
-                Text(String(person.name.prefix(1)))
+                Text(computeInitials(from: person.name))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(color)
             }
@@ -6182,7 +6258,7 @@ struct PersonBubble: View {
                 .fill(color.opacity(0.2))
                 .frame(width: 30, height: 30)
             
-            Text(String(person.name.prefix(1)))
+            Text(computeInitials(from: person.name))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(color)
         }
@@ -6309,8 +6385,8 @@ struct Table3DView: View {
                     .frame(width: 50, height: 50)
                     .clipShape(Circle())
             } else {
-                Text(String(person.name.prefix(1)))
-                    .font(.system(size: 28, weight: .bold))
+                Text(computeInitials(from: person.name))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
             }
         }
@@ -7291,7 +7367,7 @@ struct TableManagerView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.arrow.down")
+                            Image(systemName: "arrow.up.arrow.down.square")
                             Text("Sort")
                         }
                         .font(.system(size: 15, weight: .semibold))
@@ -7417,6 +7493,12 @@ struct TableManagerView: View {
     }
 
     private func createNewTableAndOpen() {
+        // Gate creating additional tables behind Pro if more than 1 exists
+        let existingCount = viewModel.tableCollection.tables.count
+        if existingCount >= 1 && !canUseUnlimitedFeatures() {
+            NotificationCenter.default.post(name: .showPaywall, object: nil)
+            return
+        }
         let id = viewModel.createAndSwitchToNewTable()
         showTransientToast("Opened Table \(id + 1)")
         onOpenTable?(id)
@@ -7496,11 +7578,11 @@ private struct TableCard: View {
                     },
                     onPersonTap: { _ in }
                 )
-                .scaleEffect(0.68)
-                .frame(height: 110)
+                .scaleEffect(0.76)
+                .frame(height: 125)
                 .padding(.top, 16)
             }
-            .frame(height: 156)
+            .frame(height: 176)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground)))
             // Move controls to the top of the preview area
             .overlay(alignment: .topLeading) {
@@ -7509,8 +7591,10 @@ private struct TableCard: View {
                         .font(.system(size: 16, weight: .semibold))
                         .padding(8)
                         .background(Capsule().fill(Color(.systemGray6)))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .padding(6)
+                .offset(y: -8)
             }
             .overlay(alignment: .topTrailing) {
                 Button(action: { onDelete() }) {
@@ -7519,8 +7603,10 @@ private struct TableCard: View {
                         .foregroundColor(.red)
                         .padding(8)
                         .background(Capsule().fill(Color(.systemGray6)))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .padding(6)
+                .offset(y: -8)
             }
             
 
@@ -7542,7 +7628,7 @@ private struct TableCard: View {
                     .background(Capsule().fill(Color(.systemGray5)))
             }
         }
-        .frame(minHeight: 220)
+        .frame(minHeight: 236)
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 14)
