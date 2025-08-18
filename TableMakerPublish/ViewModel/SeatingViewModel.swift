@@ -178,9 +178,9 @@ class SeatingViewModel: ObservableObject {
         // Save snapshot in history
         saveCurrentArrangement()
 
-        // Trigger interstitial/fullscreen ad after table(s) creation completes
+        // Trigger interstitial/fullscreen ad after table(s) creation completes (non-blocking)
         DispatchQueue.main.async {
-            AdsManager.shared.showInterstitialIfReady()
+            AdsManager.shared.showInterstitialThen({})
         }
     }
 
@@ -546,26 +546,40 @@ class SeatingViewModel: ObservableObject {
         // First, save to the table collection
         saveCurrentTableState()
         
-        // Use eventTitle for the history title if available
-        let historyTitle: String
-        if let eventTitle = currentArrangement.eventTitle, !eventTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            historyTitle = eventTitle
-        } else if !currentTableName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            historyTitle = currentTableName
-        } else {
-            historyTitle = "Table \(tableCollection.currentTableId + 1)"
-        }
+        // Prefer the event name for the saved arrangement title in history; fall back to table name.
+        let historyTitle: String = {
+            let eventTrimmed = (currentArrangement.eventTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !eventTrimmed.isEmpty { return eventTrimmed }
+            let tableTrimmed = currentTableName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return tableTrimmed.isEmpty ? "Table \(tableCollection.currentTableId + 1)" : tableTrimmed
+        }()
         
         // Create a new arrangement with a unique ID for the history
         let newArrangement = SeatingArrangement(
             id: UUID(),
-            title: historyTitle, // Use event name for history
-            eventTitle: currentArrangement.eventTitle, // Event name
+            title: historyTitle, // Persist the table name as the label
+            eventTitle: currentArrangement.eventTitle, // Keep the event name separate
             date: Date(),
             people: currentArrangement.people,
             tableShape: currentArrangement.tableShape,
             seatAssignments: currentArrangement.seatAssignments
         )
+
+        // Avoid duplicate entries when nothing material changed since the last save
+        if let mostRecent = savedArrangements.max(by: { $0.date < $1.date }) {
+            let sameTitle = mostRecent.title == newArrangement.title
+            let sameEvent = (mostRecent.eventTitle ?? "") == (newArrangement.eventTitle ?? "")
+            let sameShape = mostRecent.tableShape == newArrangement.tableShape
+            let orderedA = mostRecent.people.sorted { (mostRecent.seatAssignments[$0.id] ?? 0) < (mostRecent.seatAssignments[$1.id] ?? 0) }
+            let orderedB = newArrangement.people.sorted { (newArrangement.seatAssignments[$0.id] ?? 0) < (newArrangement.seatAssignments[$1.id] ?? 0) }
+            let samePeople = orderedA.map { $0.id } == orderedB.map { $0.id }
+            let sameSeats = orderedA.enumerated().allSatisfy { idx, person in
+                (mostRecent.seatAssignments[person.id] ?? idx) == (newArrangement.seatAssignments[orderedB[idx].id] ?? idx)
+            }
+            if sameTitle && sameEvent && sameShape && samePeople && sameSeats {
+                return
+            }
+        }
         
         // Add to saved arrangements and sort by date
         savedArrangements.append(newArrangement)
@@ -786,6 +800,16 @@ class SeatingViewModel: ObservableObject {
         Task { await saveToUserDefaults() }
     }
 
+    /// Rename an event in history. Updates both `eventTitle` and the display `title`.
+    func renameEvent(arrangementId: UUID, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let index = savedArrangements.firstIndex(where: { $0.id == arrangementId }) else { return }
+        savedArrangements[index].eventTitle = trimmed
+        savedArrangements[index].title = trimmed
+        Task { await saveToUserDefaults() }
+    }
+
     // Public method to trigger statistics refresh
     func refreshStatistics() {
         // This is just a trigger to update the UI if needed
@@ -821,6 +845,9 @@ class SeatingViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "profileImageData")
         // Reset dark mode to light mode
         UserDefaults.standard.set(false, forKey: "isDarkMode")
+        // Reset interactive onboarding progress and ensure first-part tutorial considered completed
+        UserDefaults.standard.set(true, forKey: "hasSeenTutorial")
+        UserDefaults.standard.set(false, forKey: "hasCompletedInteractiveOnboarding")
         // Reset current arrangement properties that are affected by defaults
         currentArrangement.tableShape = .round
         // --- ADDED: Clear all tables and arrangements ---
@@ -835,7 +862,6 @@ class SeatingViewModel: ObservableObject {
         currentTableName = ""
         isViewingHistory = false
         saveTableCollection()
-        UserDefaults.standard.set(true, forKey: "hasSeenTutorial")
         objectWillChange.send()
     }
     
@@ -851,6 +877,9 @@ class SeatingViewModel: ObservableObject {
             return
         }
         currentArrangement.people[index].colorIndex = colorIndex
+        // Persist the change immediately so it is not lost
+        saveCurrentTableState()
+        saveTableCollection()
         // Also update in saved arrangements if this person is in a saved arrangement
         for i in 0..<savedArrangements.count {
             if let personIndex = savedArrangements[i].people.firstIndex(where: { $0.id == personId }) {
@@ -908,18 +937,15 @@ class SeatingViewModel: ObservableObject {
     
     // Save the current table state to the collection
     func saveCurrentTableState() {
-        // Validate current arrangement before saving
-        guard !currentArrangement.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            NotificationCenter.default.post(
-                name: Notification.Name("ShowErrorAlert"),
-                object: nil,
-                userInfo: ["message": "Table title cannot be empty"]
-            )
-            return
-        }
-        
+        // Always persist; if no title yet, apply a sensible default so edits (like notes) are not lost
         var currentArrangement = self.currentArrangement
-        currentArrangement.title = currentTableName
+        let defaultTitle = "Table \(tableCollection.currentTableId + 1)"
+        if currentTableName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            currentArrangement.title = defaultTitle
+            currentTableName = defaultTitle
+        } else {
+            currentArrangement.title = currentTableName
+        }
         // Do NOT overwrite eventTitle here
         tableCollection.tables[tableCollection.currentTableId] = currentArrangement
     }
@@ -1216,6 +1242,66 @@ class SeatingViewModel: ObservableObject {
         return csv
     }
     
+    // MARK: - Smart Seating
+    /// Automatically creates a balanced multi-table seating layout from a flat list of names.
+    /// - Parameter names: Guest names to seat. Duplicates already seated across any table are ignored.
+    @MainActor
+    func smartCreateTables(from names: [String]) {
+        let trimmed = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+
+        // De-duplicate against existing seated people across all tables
+        let existingNamesLowercased: Set<String> = {
+            let all = tableCollection.tables.values.flatMap { $0.people.map { $0.name.lowercased() } }
+            return Set(all)
+        }()
+        let uniqueNewNames = trimmed.filter { !existingNamesLowercased.contains($0.lowercased()) }
+        guard !uniqueNewNames.isEmpty else { return }
+
+        // Decide number of tables so that no table exceeds 10 people (pleasant density),
+        // distributing remainder one per table starting from the first table.
+        let maxPreferredPerTable = 10
+        let totalGuests = uniqueNewNames.count
+        let numberOfTables = max(1, Int(ceil(Double(totalGuests) / Double(maxPreferredPerTable))))
+
+        let base = totalGuests / numberOfTables
+        let remainder = totalGuests % numberOfTables
+
+        // Build table sizes following the rule: remainders go to first tables
+        var tableSizes: [Int] = []
+        for i in 0..<numberOfTables {
+            tableSizes.append(base + (i < remainder ? 1 : 0))
+        }
+
+        // Split names into assignments per table preserving order
+        var assignments: [[String]] = []
+        var index = 0
+        for size in tableSizes {
+            let end = min(index + size, uniqueNewNames.count)
+            if index < end {
+                assignments.append(Array(uniqueNewNames[index..<end]))
+            } else {
+                assignments.append([])
+            }
+            index = end
+        }
+
+        // Choose an optimal shape per table based on guest count
+        func shape(for count: Int) -> TableShape {
+            switch count {
+            case 0...4: return .square
+            case 5...8: return .rectangle
+            default: return .round
+            }
+        }
+        let shapes: [TableShape] = assignments.map { shape(for: $0.count) }
+
+        // Create new tables appended after existing ones and persist, show interstitial first
+        AdsManager.shared.showInterstitialThen { [weak self] in
+            guard let self = self else { return }
+            self.createTablesFromImported(assignments: assignments, shapes: shapes, eventTitle: self.currentArrangement.eventTitle)
+        }
+    }
+
     // Add this method to allow changing the app icon
     @MainActor
     func changeAppIcon(to iconName: String?) {

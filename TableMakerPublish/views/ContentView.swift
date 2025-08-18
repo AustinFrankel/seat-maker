@@ -8,6 +8,7 @@ import StoreKit // For App Store review prompt
 import Combine
 import Foundation
 import UserNotifications
+import UniformTypeIdentifiers
 // If needed, add the following import to ensure the correct SeatingArrangement is used:
 // import TableMakerPublish.Models
 
@@ -20,6 +21,19 @@ extension EnvironmentValues {
     var showingTutorialInitially: Bool {
         get { self[ShowingTutorialInitiallyKey.self] }
         set { self[ShowingTutorialInitiallyKey.self] = newValue }
+    }
+}
+
+// Transferable wrapper for sharing a PNG image via ShareLink
+struct TableLayoutImage: Transferable {
+    let image: UIImage
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) { value in
+            guard let data = value.image.pngData() else {
+                throw NSError(domain: "Share", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode image as PNG."])
+            }
+            return data
+        }
     }
 }
 
@@ -201,6 +215,8 @@ struct ContentView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
     @AppStorage("userName") private var userName = ""
     @AppStorage("profileImageData") private var profileImageData: Data?
+    @AppStorage("appTheme") private var appTheme: String = "classic"
+    @AppStorage("customAccentHex") private var customAccentHex: String = "#007AFF"
     @State private var showingTutorial = false
     @State private var showingContactsPicker = false
     @State private var showingImportFromList = false
@@ -231,6 +247,26 @@ struct ContentView: View {
     // Consider the entire collection empty when all tables have zero people
     private var isAllTablesEmpty: Bool {
         viewModel.tableCollection.tables.values.allSatisfy { $0.people.isEmpty }
+    }
+    // Local background resolver to avoid cross-file symbol lookup
+    private func localResolveThemeBackground(_ theme: String, isDark: Bool) -> Color {
+        switch theme {
+        case "ocean":
+            return isDark ? Color(red: 0.03, green: 0.10, blue: 0.15) : Color(red: 0.88, green: 0.96, blue: 1.00)
+        case "sunset":
+            return isDark ? Color(red: 0.12, green: 0.06, blue: 0.10) : Color(red: 1.00, green: 0.95, blue: 0.90)
+        case "forest":
+            return isDark ? Color(red: 0.06, green: 0.10, blue: 0.08) : Color(red: 0.93, green: 0.98, blue: 0.94)
+        case "midnight":
+            return isDark ? Color(red: 0.05, green: 0.05, blue: 0.08) : Color(red: 0.94, green: 0.95, blue: 0.98)
+        case "custom":
+            let accentUI = UIColor(colorFromHex(customAccentHex))
+            let mixed: UIColor = isDark ? mix(accentUI, UIColor.black, t: 0.85) : mix(accentUI, UIColor.white, t: 0.92)
+            return Color(mixed)
+        default:
+            // Classic is pure white in light, system background in dark
+            return isDark ? Color(.systemBackground) : Color.white
+        }
     }
     
     private func onToggleDarkMode(_ newValue: Bool) {
@@ -284,7 +320,6 @@ struct ContentView: View {
     @State private var showEffortlessScreen = false
     
     @State private var showingPhotoPermissionRequest = false
-    
     // Add state for delete confirmation
     @State private var showDeleteConfirmation = false
     
@@ -310,6 +345,21 @@ struct ContentView: View {
             savingDialogConditionalView
             tutorialView
         }
+        .onAppear {
+            registerOnboardingActions()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if !showEffortlessScreen {
+                    OnboardingController.shared.startIfNeeded(context: .mainTable)
+                }
+            }
+        }
+        .onChange(of: showEffortlessScreen) { newValue in
+            if !newValue {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    OnboardingController.shared.startIfNeeded(context: .mainTable)
+                }
+            }
+        }
         .overlay(alignment: .top) {
             if let toast = openedToast {
                 Text(toast)
@@ -331,7 +381,12 @@ struct ContentView: View {
                     if let index = viewModel.currentArrangement.people.firstIndex(where: { $0.id == person.id }) {
                         editingPersonIndex = index
                         editingPersonName = person.name
+                        editingPersonComment = person.comment ?? ""
                         selectedProfileColor = getPersonColor(for: person.id, in: viewModel.currentArrangement)
+                        profileImage = nil
+                        if let imageData = viewModel.currentArrangement.people[index].profileImageData {
+                            profileImage = UIImage(data: imageData)
+                        }
                         showingProfileEditor = true
                     }
                 }
@@ -350,9 +405,28 @@ struct ContentView: View {
                     }
                 }
             )
+            // Provide anchor collection within the sheet
+            .overlayPreferenceValue(OnboardingAnchorPreferenceKey.self) { anchors in
+                GeometryReader { proxy in
+                    let _ = OnboardingController.shared.updateResolvedAnchors { key in
+                        guard let a = anchors[key] else { return nil }
+                        return proxy[a]
+                    }
+                    Color.clear
+                }
+            }
         }
         .sheet(isPresented: $showingAddPerson) {
             addPersonView
+                .overlayPreferenceValue(OnboardingAnchorPreferenceKey.self) { anchors in
+                    GeometryReader { proxy in
+                        let _ = OnboardingController.shared.updateResolvedAnchors { key in
+                            guard let a = anchors[key] else { return nil }
+                            return proxy[a]
+                        }
+                        Color.clear
+                    }
+                }
         }
         .sheet(isPresented: $showingHistory) {
             HistoryView(
@@ -417,7 +491,9 @@ struct ContentView: View {
                 AllTablesExportView(
                     viewModel: viewModel,
                     showEffortlessScreen: $showEffortlessScreen,
-                    showingTutorial: $showingTutorial
+                    showingTutorial: $showingTutorial,
+                    parentExportItems: $exportItems,
+                    parentIsShowingShareSheet: $isShowingShareSheet
                 )
             }
         }
@@ -572,6 +648,16 @@ struct ContentView: View {
                         showingAddPerson = false // Dismiss add person view and return to main screen
                         showEffortlessScreen = false // Always show main table after import
                     }
+                },
+                onSmartSeating: { selected in
+                    DispatchQueue.main.async {
+                        viewModel.smartCreateTables(from: Array(selected))
+                        viewModel.suggestedNames = []
+                        showingContactsPicker = false
+                        viewModel.isLoadingContacts = false
+                        showingAddPerson = false
+                        showEffortlessScreen = false
+                    }
                 }
             )
         }
@@ -675,6 +761,28 @@ struct ContentView: View {
         }
     }
     
+    // Present Settings reliably by dismissing any other sheets first, then toggling the flag
+    private func openSettingsSafely() {
+        // Dismiss potentially conflicting presentations
+        showingContactsPicker = false
+        isShowingShareSheet = false
+        showExportSheet = false
+        showingProfileEditor = false
+        showingHistory = false
+        showingAddPerson = false
+        showingImagePicker = false
+        showingTerms = false
+        viewModel.showingQRCodeSheet = false
+        importStartIntent = nil
+        showingGuestManager = false
+        
+        // Defer presentation slightly to allow previous dismissals to settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showingSettings = true
+            }
+        }
+    }
     private var headerView: some View {
         VStack(spacing: 2) {
             if !viewModel.isViewingHistory {
@@ -686,8 +794,10 @@ struct ContentView: View {
                     // Left side: Back when viewing history, otherwise Settings (if appropriate)
                     if viewModel.isViewingHistory {
                         Button(action: {
-                            triggerHaptic()
-                            handleHistoryBack()
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                triggerHaptic()
+                                handleHistoryBack()
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "chevron.left")
@@ -695,20 +805,23 @@ struct ContentView: View {
                                 Text("Back")
                                     .font(.system(size: 17, weight: .semibold))
                             }
-                            .foregroundColor(.blue)
                             .frame(height: 48)
                         }
                         .padding(.top, 3)
                     } else if !showingTutorial && !showEffortlessScreen && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
                         Button(action: {
                             triggerHaptic()
-                            showingSettings = true
+                            AdsManager.shared.showInterstitialThen {
+                                openSettingsSafely()
+                            }
                         }) {
                             Image(systemName: "gear")
                                 .font(.system(size: 28))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.accentColor)
                                 .frame(width: 48, height: 48)
                         }
+                        .accessibilityIdentifier("btn.settings")
+                        .onboardingAnchor(.settings)
                         .padding(.top, 3)
                     } else {
                         Spacer().frame(width: 40)
@@ -716,20 +829,30 @@ struct ContentView: View {
                     Spacer()
                     if !showingTutorial && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
                         HStack(spacing: 4) {
-                            Button(action: { triggerHaptic(); showingTableManager = true }) {
+                            Button(action: { DispatchQueue.main.async {
+                                triggerHaptic()
+                                AdsManager.shared.showInterstitialThen {
+                                    showingTableManager = true
+                                    OnboardingController.shared.advanceIfOn(anchor: .tableManager)
+                                }
+                            } }) {
                                 Image(systemName: "rectangle.grid.2x2")
                                     .font(.system(size: 24))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(.accentColor)
                                     .frame(width: 40, height: 40)
                                     .accessibilityLabel("View tables")
                             }
+                            .accessibilityIdentifier("btn.tableManager")
+                            .onboardingAnchor(.tableManager)
                             .offset(y: 2) // move the icon down two pixels
-                            Button(action: { triggerHaptic(); showingSaveDialog = true }) {
+                            Button(action: { DispatchQueue.main.async { triggerHaptic(); showingSaveDialog = true }; if OnboardingController.shared.isActive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OnboardingController.shared.advanceIfOn(anchor: .share) } } }) {
                                 Image(systemName: "square.and.arrow.up")
                                     .font(.system(size: 24))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(.accentColor)
                                     .frame(width: 40, height: 40)
                             }
+                            .accessibilityIdentifier("btn.share")
+                            .onboardingAnchor(.share)
                             .disabled(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty)
                             .opacity((viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty) ? 0.5 : 1)
                         }
@@ -766,7 +889,6 @@ struct ContentView: View {
                 .scaleEffect(1.5)
         }
     }
-    
     private var saveDialogContent: some View {
         ZStack {
             VStack(spacing: 16) {
@@ -804,7 +926,7 @@ struct ContentView: View {
                                             .fill(Color.blue.opacity(0.1))
                                             .overlay(
                                                 Capsule()
-                                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                                    .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
                                             )
                                     )
                             }
@@ -822,6 +944,7 @@ struct ContentView: View {
                         showingSaveDialog = false
                     }
                     .buttonStyle(.bordered)
+                    .tint(.blue)
                     
                     Button("Save") {
                         triggerHaptic()
@@ -851,7 +974,7 @@ struct ContentView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.5), lineWidth: 2.5) // Increased border width by 2 pixels
+                            .stroke(Color.accentColor.opacity(0.5), lineWidth: 2.5) // Increased border width by 2 pixels
                     )
             )
             .shadow(color: Color.black.opacity(0.25), radius: 15, x: 0, y: 5)
@@ -933,11 +1056,10 @@ struct ContentView: View {
                 Spacer().frame(height: 5)
             }
             VStack(spacing: 10) {
-                Spacer().frame(height: 18) // Was 8, now 18 (move everything below down 10px)
-                // All content from table tox Add/Delete buttons
+                Spacer().frame(height: 18)
                 Spacer().frame(height: 8)
-            // Main content/table area with navigation controls
-            ZStack {
+                // Main content/table area with navigation controls
+                ZStack {
                     // The table view with swipe gesture applied directly to this container
                 VStack {
                     ZStack {
@@ -949,7 +1071,12 @@ struct ContentView: View {
                                 if let index = viewModel.currentArrangement.people.firstIndex(where: { $0.id == person.id }) {
                                     editingPersonIndex = index
                                     editingPersonName = person.name
+                                    editingPersonComment = person.comment ?? ""
                                     selectedProfileColor = getPersonColor(for: person.id, in: viewModel.currentArrangement)
+                                    profileImage = nil
+                                    if let imageData = viewModel.currentArrangement.people[index].profileImageData {
+                                        profileImage = UIImage(data: imageData)
+                                    }
                                     showingProfileEditor = true
                                 }
                             }
@@ -1082,6 +1209,8 @@ struct ContentView: View {
                     .padding(.vertical, 4)
                     .padding(.top, -11) // Changed from -10 to -15 to move 5 pixels higher
                 .frame(maxWidth: .infinity, alignment: .center)
+                .accessibilityIdentifier("btn.shapeSelector")
+                .onboardingAnchor(.shapeSelector)
             
             // People list with adjusted padding
             VStack(alignment: .leading, spacing: 4) {
@@ -1098,12 +1227,14 @@ struct ContentView: View {
                             .accessibilityLabel("People List")
                     }
                     Spacer()
-                    Button(action: { showingGuestManager = true }) {
+                    Button(action: { DispatchQueue.main.async { showingGuestManager = true; OnboardingController.shared.advanceIfOn(anchor: .managePeople) } }) {
                         Text("Manage")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.blue)
                             .accessibilityLabel("Open Guest Manager")
                     }
+                    .accessibilityIdentifier("btn.managePeople")
+                    .onboardingAnchor(.managePeople)
                 }
                     .font(.headline)
                     .foregroundColor(.secondary)
@@ -1125,6 +1256,9 @@ struct ContentView: View {
                                         DispatchQueue.main.async {
                                             if let realIndex = viewModel.currentArrangement.people.firstIndex(where: { $0.id == person.id }) {
                                                 viewModel.currentArrangement.people[realIndex].name = newName
+                                                // Persist immediately so Table Manager reflects the change
+                                                viewModel.saveCurrentTableState()
+                                                viewModel.saveTableCollection()
                                             }
                                         }
                                     },
@@ -1217,8 +1351,8 @@ struct ContentView: View {
 
             Spacer(minLength: 10) // Slightly more space before Shuffle/History
 
-            // Shuffle/History area at the bottom, smaller and more separated
-            VStack(spacing: 12) { // Less spacing
+            // Shuffle/History area at the bottom, themed background
+            VStack(spacing: 12) {
                 Button(action: { 
                     triggerHaptic(.medium)
                     withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { 
@@ -1238,12 +1372,14 @@ struct ContentView: View {
                     .frame(height: 54) // Increased from 44
                     .background(
                         RoundedRectangle(cornerRadius: 22)
-                            .fill(Color.blue)
-                            .shadow(color: Color.blue.opacity(0.18), radius: 8, x: 0, y: 2)
+                            .fill(Color.accentColor)
+                            .shadow(color: Color.accentColor.opacity(0.18), radius: 8, x: 0, y: 2)
                     )
                 }
                 .accessibilityLabel("Shuffle")
+                .accessibilityIdentifier("btn.shuffle")
                 .accessibilityAddTraits(.isButton)
+                .onboardingAnchor(.shuffle)
                 .disabled(viewModel.currentArrangement.people.isEmpty)
                 .opacity(viewModel.currentArrangement.people.isEmpty ? 0.5 : 1)
 
@@ -1266,11 +1402,11 @@ struct ContentView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 22)
                             .fill(Color(.systemBackground).opacity(isDarkMode ? 0 : 1))
-                            .shadow(color: Color.blue.opacity(0.10), radius: 6, x: 0, y: 1)
+                            .shadow(color: Color.accentColor.opacity(0.10), radius: 6, x: 0, y: 1)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
-                            .stroke(Color.blue, lineWidth: 2)
+                            .stroke(Color.accentColor, lineWidth: 2)
                     )
                 }
                 .accessibilityLabel("History")
@@ -1282,7 +1418,7 @@ struct ContentView: View {
             .padding(.horizontal, 16) // Less padding
             .padding(.bottom, 18) // Was 12, now 18 (move down 6px)
             .background(
-                Color(.systemBackground)
+                localResolveThemeBackground(appTheme, isDark: isDarkMode)
                     .opacity(0.98)
                     .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: -2)
             )
@@ -1300,6 +1436,8 @@ struct ContentView: View {
                 onOpenTable: { id in
                     viewModel.switchToTable(id: id)
                     showingTableManager = false
+                    // If onboarding is highlighting the table manager, advance when destination appears
+                    OnboardingController.shared.advanceIfOn(anchor: .tableManager)
                 }
             )
         }
@@ -1458,12 +1596,12 @@ struct ContentView: View {
         }) {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(Color.blue.opacity(0.1))
-                        .shadow(color: Color.blue.opacity(0.2), radius: 4, x: 0, y: 2)
+                        .fill(Color.accentColor.opacity(0.12))
+                        .shadow(color: Color.accentColor.opacity(0.2), radius: 4, x: 0, y: 2)
                 )
         }
         .disabled(direction == .left && viewModel.tableCollection.currentTableId == 0)
@@ -1484,8 +1622,8 @@ struct ContentView: View {
                 .frame(height: 56)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.blue)
-                        .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .fill(Color.accentColor)
+                        .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
                 )
             }
             .disabled(viewModel.currentArrangement.people.isEmpty)
@@ -1503,17 +1641,17 @@ struct ContentView: View {
                     Text("HISTORY")
                 }
                 .font(.headline)
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56) // Increased from 46 to 56 to meet minimum touch target
                 .background(
                     RoundedRectangle(cornerRadius: 22)
                         .fill(Color(.systemBackground).opacity(isDarkMode ? 0 : 1))
-                        .shadow(color: Color.blue.opacity(0.10), radius: 6, x: 0, y: 1)
+                        .shadow(color: Color.accentColor.opacity(0.10), radius: 6, x: 0, y: 1)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
-                        .stroke(Color.blue, lineWidth: 2)
+                        .stroke(Color.accentColor, lineWidth: 2)
                 )
             }
             .disabled(viewModel.savedArrangements.isEmpty)
@@ -1551,14 +1689,13 @@ struct ContentView: View {
         // Get comprehensive text for all tables
         let exportText = viewModel.exportAllTables()
         
-        AdsManager.shared.showInterstitialIfReady()
-        let activityVC = UIActivityViewController(
-            activityItems: [exportText],
-            applicationActivities: nil
-        )
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        AdsManager.shared.showInterstitialThen {
+            let activityVC = UIActivityViewController(
+                activityItems: [exportText],
+                applicationActivities: nil
+            )
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootVC = windowScene.windows.first?.rootViewController {
                 rootVC.present(activityVC, animated: true)
             }
         }
@@ -1631,6 +1768,8 @@ struct ContentView: View {
         .padding(.vertical, 4)
         .padding(.top, 0)
         .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityIdentifier("btn.shapeSelector")
+        .onboardingAnchor(.shapeSelector)
     }
     
     struct TableShapeSelectorButton: View {
@@ -1641,7 +1780,7 @@ struct ContentView: View {
         var body: some View {
             Button(action: action) {
                 VStack(spacing: 1) {
-                    let outlineColor: Color = isSelected ? Color.blue : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.gray.opacity(0.45))
+                    let outlineColor: Color = isSelected ? Color.accentColor : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.gray.opacity(0.45))
                     let outlineWidth: CGFloat = isSelected ? 3 : 2.1
             switch shape {
                     case .round:
@@ -1662,7 +1801,7 @@ struct ContentView: View {
                     }
                     Text(shape.displayName.replacingOccurrences(of: " Table", with: ""))
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(isSelected ? Color.blue : (colorScheme == .dark ? Color.white.opacity(0.8) : Color.gray))
+                        .foregroundColor(isSelected ? Color.accentColor : (colorScheme == .dark ? Color.white.opacity(0.8) : Color.gray))
                         .multilineTextAlignment(.center)
                         .padding(.top, 0.5)
                 }
@@ -1674,11 +1813,10 @@ struct ContentView: View {
             .accessibilityAddTraits(isSelected ? .isSelected : .isButton)
         }
     }
-    
     private var emptyStateView: some View {
         ZStack {
-            // Gradient background
-            LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.15)]), startPoint: .top, endPoint: .bottom)
+            // Gradient background matching screenshot: light blue (top) to light pink (bottom)
+            LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.18), Color.pink.opacity(0.14)]), startPoint: .top, endPoint: .bottom)
                 .frame(maxHeight: .infinity)
                 .ignoresSafeArea()
                 .padding(.bottom, -25) // Extend 25pt lower
@@ -1694,13 +1832,13 @@ struct ContentView: View {
                         .frame(width: 120, height: 120)
                     Image(systemName: "person.3.fill")
                         .font(.system(size: 60)) // smaller
-                        .foregroundColor(.blue.opacity(0.8))
+                        .foregroundColor(Color.blue.opacity(0.8))
                 }
                 // Title and subtitle
                 Text("Seat Maker")
                     .font(.system(size: 24, weight: .bold)) // Reduced from 28
                     .foregroundColor(.blue)
-                    .shadow(color: Color.blue.opacity(0.08), radius: 4, x: 0, y: 2)
+                    .shadow(color: Color.accentColor.opacity(0.08), radius: 4, x: 0, y: 2)
                 Text("Create seating for events")
                     .font(.system(size: 16, weight: .regular)) // Changed from 18 to 16
                     .foregroundColor(.gray)
@@ -1725,6 +1863,7 @@ struct ContentView: View {
                 Button(action: { 
                     showingAddPerson = true
                     // Don't automatically trigger add person popup when entering this screen
+                    OnboardingController.shared.advanceIfOn(anchor: .getStarted)
                 }) {
                     HStack {
                         Image(systemName: "person.badge.plus")
@@ -1749,6 +1888,8 @@ struct ContentView: View {
                     )
                     .frame(width: 183)
                 }
+                .accessibilityIdentifier("btn.getStarted")
+                .onboardingAnchor(.getStarted)
                 .padding(.top, 4)
                 
                 if viewModel.hasSavedArrangements {
@@ -1795,14 +1936,13 @@ struct ContentView: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text("\(number)")
                 .font(.title2.monospacedDigit())
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
                 .frame(width: 28, alignment: .leading)
             Text(text)
                 .font(.headline)
                 .foregroundColor(.primary)
         }
     }
-    
     private var addPersonView: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -1877,6 +2017,7 @@ struct ContentView: View {
                                     viewModel.fetchContacts()
                                 }
                             } else {
+                                // Only show the redirect alert when permission was explicitly denied
                                 permissionDeniedContacts = true
                                 viewModel.isLoadingContacts = false
                             }
@@ -1967,7 +2108,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         showingAddPerson = false
-                    }
+                    }.tint(.blue)
                 }
             }
             .sheet(isPresented: $showingContactsPicker, onDismiss: {
@@ -1996,6 +2137,16 @@ struct ContentView: View {
                             viewModel.isLoadingContacts = false
                             showingAddPerson = false // Dismiss add person view and return to main screen
                             showEffortlessScreen = false // Always show main table after import
+                        }
+                    },
+                    onSmartSeating: { selected in
+                        DispatchQueue.main.async {
+                            viewModel.smartCreateTables(from: Array(selected))
+                            viewModel.suggestedNames = []
+                            showingContactsPicker = false
+                            viewModel.isLoadingContacts = false
+                            showingAddPerson = false
+                            showEffortlessScreen = false
                         }
                     }
                 )
@@ -2031,6 +2182,81 @@ struct ContentView: View {
             } message: {
                 Text("A person with this name already exists in one of your tables. Please choose a different name.")
             }
+        }
+    }
+
+    // MARK: - Onboarding registrations
+    private func registerOnboardingActions() {
+        // Manage People (opens guest manager sheet)
+        OnboardingController.shared.registerAction(for: .managePeople) {
+            DispatchQueue.main.async {
+                showingGuestManager = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    OnboardingController.shared.advanceIfOn(anchor: .managePeople)
+                }
+            }
+        }
+        // Add button (main bar)
+        OnboardingController.shared.registerAction(for: .add) {
+            DispatchQueue.main.async {
+                triggerHaptic(.medium)
+                newPersonName = ""
+                showingAddPerson = true
+                // Do not auto-advance; user will press Next to proceed from step 1
+            }
+        }
+        // Shuffle
+        OnboardingController.shared.registerAction(for: .shuffle) {
+            DispatchQueue.main.async {
+                triggerHaptic(.medium)
+                withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) {
+                    viewModel.shuffleSeats()
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    OnboardingController.shared.advanceIfOn(anchor: .shuffle)
+                }
+            }
+        }
+        // Shape selector
+        OnboardingController.shared.registerAction(for: .shapeSelector) {
+            DispatchQueue.main.async {
+                // Nudge the currently selected shape to reapply state, just to give feedback
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    let current = viewModel.currentArrangement.tableShape
+                    viewModel.currentArrangement.tableShape = current
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    OnboardingController.shared.advanceIfOn(anchor: .shapeSelector)
+                }
+            }
+        }
+        // Get Started (same as tapping the primary empty-state button)
+        OnboardingController.shared.registerAction(for: .getStarted) {
+            DispatchQueue.main.async {
+                showingAddPerson = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    OnboardingController.shared.advanceIfOn(anchor: .getStarted)
+                }
+            }
+        }
+        // Table Manager
+        OnboardingController.shared.registerAction(for: .tableManager) {
+            DispatchQueue.main.async {
+                showingTableManager = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    OnboardingController.shared.advanceIfOn(anchor: .tableManager)
+                }
+            }
+        }
+        // Share (open save/export dialog which then shows sheet)
+        OnboardingController.shared.registerAction(for: .share) {
+            DispatchQueue.main.async {
+                showingSaveDialog = true
+            }
+        }
+        // Settings
+        OnboardingController.shared.registerAction(for: .settings) {
+            DispatchQueue.main.async { openSettingsSafely() }
         }
     }
     
@@ -2074,7 +2300,7 @@ struct ContentView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                 Text("Back")
                             }
-                            .foregroundColor(.blue)
+                            .foregroundColor(.accentColor)
                         }
                     }
                     ToolbarItem(placement: .principal) {
@@ -2096,10 +2322,12 @@ struct ContentView: View {
                 }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .tint(.blue)
         .accessibilityLabel("Settings")
         .accessibilityHint("Configure app settings and preferences")
     }
     
+    // appearanceSection implemented inside SettingsViewImpl
     // MARK: - Settings View Implementation
         struct SettingsViewImpl: View {
         // Environment Objects
@@ -2131,11 +2359,92 @@ struct ContentView: View {
         
         // App Storage variables
         @AppStorage("isDarkMode") private var isDarkMode = false
+        @AppStorage("appTheme") private var appTheme: String = "classic"
+        @AppStorage("customAccentHex") private var customAccentHex: String = "#007AFF"
         @AppStorage("userName") private var userName = ""
         @AppStorage("profileImageData") private var profileImageData: Data?
         @AppStorage("pendingAppIcon") private var pendingAppIcon: String = "Default"
         @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = false
         
+        // MARK: - Appearance helpers (nested for scoping and compiler performance)
+        private struct SettingsThemePickerRow: View {
+            @Binding var appTheme: String
+            var body: some View {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ThemeSwatchChip(appTheme: $appTheme, id: "blue", label: "Blue", colors: [Color.blue, Color.purple])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "teal", label: "Teal", colors: [Color.teal, Color.blue])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "orange", label: "Orange", colors: [Color.orange, Color.red])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "pink", label: "Pink", colors: [Color.pink, Color.purple])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "green", label: "Green", colors: [Color.green, Color.teal])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "indigo", label: "Indigo", colors: [Color.indigo, Color.blue])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "gold", label: "Gold", colors: [Color.yellow, Color.orange])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "purple", label: "Purple", colors: [Color.purple, Color.indigo])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "cyan", label: "Cyan", colors: [Color.cyan, Color.blue])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "mint", label: "Mint", colors: [Color.mint, Color.teal])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "red", label: "Red", colors: [Color.red, Color.orange])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "brown", label: "Brown", colors: [Color.brown, Color.orange])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "gray", label: "Gray", colors: [Color.gray, Color.black.opacity(0.6)])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "custom", label: "Custom", colors: [Color.accentColor.opacity(0.6), Color.accentColor])
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+
+        private struct ThemeSwatchChip: View {
+            @Binding var appTheme: String
+            let id: String
+            let label: String
+            let colors: [Color]
+            var body: some View {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) { appTheme = id }
+                }) {
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 34, height: 26)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(appTheme == id ? Color.primary.opacity(0.6) : Color.clear, lineWidth: 2)
+                            )
+                        Text(label)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel("Select \(label) theme")
+            }
+        }
+
+        // Local swatch used in Appearance section (limited to 5 themes)
+        private struct ThemeSwatch: View {
+            @Binding var appTheme: String
+            let id: String
+            let label: String
+            let colors: [Color]
+            var body: some View {
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { appTheme = id } }) {
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 36, height: 28)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(appTheme == id ? Color.primary.opacity(0.6) : Color.clear, lineWidth: 2)
+                            )
+                        Text(label)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel("Select \(label) theme")
+            }
+        }
+
         // Manager state class
         private final class ManagerState: ObservableObject {
             @Published private(set) var orientationLock: OrientationLock
@@ -2194,29 +2503,6 @@ struct ContentView: View {
         var body: some View {
             VStack(spacing: 0) {
                 Form {
-                    // Purchases Section
-                    Section(header: Text("Purchases")) {
-                        HStack {
-                            Text("Pro unlocked")
-                            Spacer()
-                            Image(systemName: rc.state.unlimitedFeatures ? "checkmark.seal.fill" : "xmark.seal")
-                                .foregroundColor(rc.state.unlimitedFeatures ? .green : .red)
-                        }
-                        HStack {
-                            Text("Ads disabled")
-                            Spacer()
-                            Image(systemName: rc.state.adsDisabled ? "checkmark.circle.fill" : "xmark.circle")
-                                .foregroundColor(rc.state.adsDisabled ? .green : .red)
-                        }
-                        Button("Upgrade to Pro") {
-                            NotificationCenter.default.post(name: .showPaywall, object: nil)
-                        }
-                        Button("Restore Purchases") {
-                            RevenueCatManager.shared.restore { result in
-                                purchaseToast = (try? result.get()) != nil ? "Restored ✅" : "Restore failed"
-                            }
-                        }
-                    }
                     // Profile Section
                     Section(header: Text("Profile")) {
                         HStack {
@@ -2246,8 +2532,29 @@ struct ContentView: View {
                             }
                         }) {
                             Label("Change Profile Picture", systemImage: "photo")
+                                .foregroundColor(.blue)
                         }
+                        // Move Restart tour right below change profile picture
+                        Button(action: {
+                            OnboardingController.shared.reset()
+                            dismiss()
+                            // Start shortly after settings sheet dismisses so anchors are available
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                OnboardingController.shared.startIfNeeded(context: .mainTable)
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "questionmark.circle")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 28, height: 28)
+                                Text("Take a tour")
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .accessibilityIdentifier("settings.restartInteractiveTour")
+                        .accessibilityLabel("Take a tour")
                     }
+                    // Remove "Help & Tutorials" header per request
                     // Appearance Section
                     Section(header: Text("Appearance")) {
                         HStack {
@@ -2257,12 +2564,51 @@ struct ContentView: View {
                             Toggle("Dark Mode", isOn: Binding(
                                 get: { isDarkMode },
                                 set: { newValue in
-                                    self.handleDarkModeChange(newValue)
+                                    handleDarkModeChange(newValue)
                                 }
                             ))
-                            .tint(.accentColor)
+                            .tint(.blue)
                         }
                         .padding(.vertical, 4)
+
+                        HStack(alignment: .center, spacing: 12) {
+                            Image(systemName: "paintpalette.fill")
+                                .foregroundColor(.primary)
+                                .frame(width: 24, height: 24)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("App Theme")
+                                HStack(spacing: 10) {
+                                    ThemeSwatch(appTheme: $appTheme, id: "classic", label: "Classic", colors: [Color.gray.opacity(0.2), Color.white])
+                                    ThemeSwatch(appTheme: $appTheme, id: "ocean", label: "Ocean", colors: [Color.cyan, Color.blue])
+                                    ThemeSwatch(appTheme: $appTheme, id: "sunset", label: "Sunset", colors: [Color.orange, Color.pink])
+                                    ThemeSwatch(appTheme: $appTheme, id: "forest", label: "Forest", colors: [Color.green, Color.teal])
+                                    ThemeSwatch(appTheme: $appTheme, id: "midnight", label: "Purple", colors: [Color.indigo, Color.purple])
+                                    ThemeSwatch(appTheme: $appTheme, id: "custom", label: "Custom", colors: [Color.accentColor.opacity(0.6), Color.accentColor])
+                                }
+                                // Custom color picker shown when Custom theme selected
+                                if appTheme == "custom" {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        // Live accent preview bar above the text, using the chosen color
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(colorFromHex(customAccentHex))
+                                            .frame(height: 10)
+                                        Text("Custom Accent Color")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        ColorPicker("Pick a color", selection: Binding(
+                                            get: { colorFromHex(customAccentHex) },
+                                            set: { newColor in
+                                                customAccentHex = hexFromColor(newColor)
+                                                // Force refresh of accent globally
+                                                UserDefaults.standard.set(customAccentHex, forKey: "customAccentHex")
+                                            }
+                                        ))
+                                        .labelsHidden()
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 6)
                     }
                     // Reminders Section
                     Section(header: Text("Reminders")) {
@@ -2360,7 +2706,6 @@ struct ContentView: View {
                 Text("\(viewModel.savedArrangements.count)")
                     .foregroundColor(.secondary)
     }
-    
             HStack {
                 Image(systemName: "person.3")
                     .foregroundColor(.primary)
@@ -2449,8 +2794,8 @@ struct ContentView: View {
                         }) {
                             HStack {
                                 ZStack {
-                                    Circle().fill(Color.orange.opacity(0.12)).frame(width: 36, height: 36)
-                                    Image(systemName: "star.fill").font(.system(size: 20, weight: .bold)).foregroundColor(.orange)
+                                    Circle().fill(Color.yellow.opacity(0.18)).frame(width: 36, height: 36)
+                                    Image(systemName: "star.fill").font(.system(size: 20, weight: .bold)).foregroundColor(.yellow)
                                 }
                                 Text("Rate Seat Maker").font(.system(size: 15, weight: .semibold)).foregroundColor(.primary)
                                 Spacer()
@@ -2459,9 +2804,9 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 16)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange.opacity(0.07)))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.13), lineWidth: 1))
-                            .shadow(color: Color.orange.opacity(0.04), radius: 2, x: 0, y: 1)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.yellow.opacity(0.10)))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.yellow.opacity(0.25), lineWidth: 1))
+                            .shadow(color: Color.yellow.opacity(0.08), radius: 2, x: 0, y: 1)
                         }
                         .accessibilityLabel("Rate Seat Maker on the App Store")
                         .padding(.bottom, 8)
@@ -2469,7 +2814,7 @@ struct ContentView: View {
                         Button(action: { showContactForm = true }) {
                             HStack {
                                 ZStack {
-                                    Circle().fill(Color.green.opacity(0.12)).frame(width: 36, height: 36)
+                                    Circle().fill(Color.green.opacity(0.16)).frame(width: 36, height: 36)
                                     Image(systemName: "envelope.fill").font(.system(size: 20, weight: .bold)).foregroundColor(.green)
                                 }
                                 Text("Send Feedback").font(.system(size: 15, weight: .semibold)).foregroundColor(.primary)
@@ -2479,9 +2824,9 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 16)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.green.opacity(0.07)))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.green.opacity(0.13), lineWidth: 1))
-                            .shadow(color: Color.green.opacity(0.04), radius: 2, x: 0, y: 1)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.green.opacity(0.10)))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.green.opacity(0.24), lineWidth: 1))
+                            .shadow(color: Color.green.opacity(0.06), radius: 2, x: 0, y: 1)
                         }
                         .sheet(isPresented: $showContactForm) { ContactFormView() }
                         .accessibilityLabel("Send feedback to the developer")
@@ -2529,8 +2874,15 @@ struct ContentView: View {
                         .accessibilityLabel("About the Creator")
                     }
 
-                    // Account & Data Section with Reset to Defaults moved here
+                    // Account & Data Section with Restore Purchases at top
                     Section(header: Text("Account & Data")) {
+                        // Restore Purchases moved here to top
+                        Button("Restore Purchases") {
+                            RevenueCatManager.shared.restore { result in
+                                purchaseToast = (try? result.get()) != nil ? "Restored ✅" : "Restore failed"
+                            }
+                        }
+                        
                         Button(action: {
                             // Show confirmation before resetting
                             showResetConfirmation = true
@@ -2610,6 +2962,8 @@ struct ContentView: View {
                 .navigationTitle("Settings")
                 .navigationBarTitleDisplayMode(.inline)
                 .preferredColorScheme(isDarkMode ? .dark : .light)
+                // Show default grouped backgrounds so section boxes appear in light mode
+                .scrollContentBackground(.visible)
                 .sheet(isPresented: $showMail) {
                     MailViewImpl(result: $mailResult)
                 }
@@ -2672,13 +3026,13 @@ struct ContentView: View {
                             // Fallback to specified system image
                             Image(systemName: systemName)
                                 .font(.system(size: 30))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.accentColor)
                         }
                         
                         // Selection indicator
                         if isSelected {
                             RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color.blue, lineWidth: 3)
+                                .strokeBorder(Color.accentColor, lineWidth: 3)
                                 .frame(width: 60, height: 60)
                         }
                     }
@@ -2687,9 +3041,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.primary)
                 }
-                .sheet(isPresented: $showPaywall) {
-                    PaywallHost(isPresented: $showPaywall)
-                }
+                // Avoid nested paywall sheets inside settings; rely on top-level fullScreenCover
                 .alert(purchaseToast ?? "", isPresented: Binding(get: { purchaseToast != nil }, set: { _ in purchaseToast = nil })) {
                     Button("OK", role: .cancel) {}
                 }
@@ -2722,7 +3074,7 @@ struct ContentView: View {
                             .scaledToFill()
                             .frame(width: 80, height: 80)
                             .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+                            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
                             .accessibilityLabel("Profile picture")
                     } else if let data = profileImageData, let image = UIImage(data: data) {
                         Image(uiImage: image)
@@ -2730,7 +3082,7 @@ struct ContentView: View {
                             .scaledToFill()
                             .frame(width: 80, height: 80)
                             .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+                            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
                             .accessibilityLabel("Profile picture")
                     } else {
                         Image(systemName: "person.circle.fill")
@@ -3109,7 +3461,6 @@ struct ContentView: View {
             return 520 * 1.43 // Increased by 10% from 1.3
         }
     }
-    
     // Completely rewritten TableView implementation to fix rectangle and square tables
     struct TableView: View {
         @Environment(\.heroTableNamespace) private var heroNamespace
@@ -3246,22 +3597,20 @@ struct ContentView: View {
         @Environment(\.colorScheme) var colorScheme
         
         private func formatName(_ name: String) -> String {
-            if let openParen = name.firstIndex(of: "("),
-               let closeParen = name.firstIndex(of: ")") {
-                let baseName = String(name[..<openParen]).trimmingCharacters(in: .whitespaces)
-                let parenthesizedPart = String(name[name.index(after: openParen)..<closeParen])
-                if let firstLetter = parenthesizedPart.first {
-                    return "\(baseName) (\(firstLetter))"
+            // Show only first name for table labels
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return name }
+            // If name has parentheses, keep the base name before parenthesis and then take only first token
+            let base: String = {
+                if let parenIndex = trimmed.firstIndex(of: "(") {
+                    return String(trimmed[..<parenIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-                return baseName
+                return trimmed
+            }()
+            if let firstToken = base.split(separator: " ").first {
+                return String(firstToken)
             }
-            let components = name.split(separator: " ")
-            if components.count >= 2 {
-                let firstName = components[0]
-                let lastNameInitial = components[1].prefix(1)
-                return "\(firstName) \(lastNameInitial)"
-            }
-            return name
+            return base
         }
         
         var iconSize: CGFloat {
@@ -3279,7 +3628,7 @@ struct ContentView: View {
                     ZStack {
                         if person.isLocked {
                             Circle()
-                                .stroke(Color.blue, lineWidth: 3)
+                                .stroke(Color.accentColor, lineWidth: 3)
                                 .frame(width: iconSize + 1, height: iconSize + 1)
                         }
                         Circle()
@@ -3404,7 +3753,7 @@ struct ContentView: View {
                                             .foregroundColor(getPersonColor(for: person.id, in: viewModel.currentArrangement))
                                     )
                                 
-                                Text(person.name)
+                                Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
                                     .font(.system(size: 16))
                                 
                                 if person.isLocked {
@@ -3441,7 +3790,7 @@ struct ContentView: View {
 
     // Present a confirmation sheet with Viewer / Make Editable
     private func presentImportChoice(arrangement: SeatingArrangement) {
-        let alert = UIAlertController(title: "Imported ‘\(arrangement.title)’", message: "Open read-only or create an editable copy.", preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: "Imported ''\(arrangement.title)''", message: "Open read-only or create an editable copy.", preferredStyle: .actionSheet)
         alert.addAction(UIAlertAction(title: "Open as Viewer", style: .default, handler: { _ in
             // Leave as-is, read-only view can be represented by isViewingHistory true
             viewModel.isViewingHistory = true
@@ -3464,13 +3813,13 @@ struct ContentView: View {
             }
         }
     }
-    
     @State private var exportItems: [Any] = []
     
     // QR Code Share View with fixed functionality
     private var qrCodeShareView: some View {
         NavigationView {
-            VStack(spacing: 20) {
+            ScrollView {
+                VStack(spacing: 20) {
                 // Mode controls
                 Picker("Mode", selection: $shareModeIsLive) {
                     Text("Snapshot").tag(false)
@@ -3519,7 +3868,7 @@ struct ContentView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .shadow(color: Color.blue.opacity(0.15), radius: 15, x: 0, y: 6)
+                            .shadow(color: Color.accentColor.opacity(0.15), radius: 15, x: 0, y: 6)
                         
                         VStack(spacing: 12) {
                             Image(uiImage: qrCode)
@@ -3541,7 +3890,7 @@ struct ContentView: View {
                         // Enhanced loading animation
                         ZStack {
                             Circle()
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 8)
+                                .stroke(Color.accentColor.opacity(0.2), lineWidth: 8)
                                 .frame(width: 80, height: 80)
                             
                             Circle()
@@ -3600,6 +3949,28 @@ struct ContentView: View {
                         }
                     }
                 }
+                // Primary share action near the QR so it's higher on screen
+                Button(action: {
+                    if let qrCode = arrangementQRCode {
+                        exportItems = [qrCode]
+                        AdsManager.shared.showInterstitialThen {
+                            viewModel.showingQRCodeSheet = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                isShowingShareSheet = true
+                            }
+                        }
+                    }
+                }) {
+                    Label("Share QR Code", systemImage: "square.and.arrow.up")
+                        .font(.headline)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 32)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor))
+                        .foregroundColor(.white)
+                        .shadow(color: Color.accentColor.opacity(0.12), radius: 4, x: 0, y: 2)
+                }
+                .padding(.top, 4)
+
                 // Show people as mini rows below QR
                 if !viewModel.currentArrangement.people.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -3631,7 +4002,7 @@ struct ContentView: View {
                     )
                     .padding(.horizontal, 8)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
                 if shareModeIsLive {
                     Button(action: {
                         LiveShareService.shared.stopHostingOrBrowsing()
@@ -3643,43 +4014,24 @@ struct ContentView: View {
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.red.opacity(0.15)))
                     }
                 }
-                Button(action: {
-                    if let qrCode = arrangementQRCode {
-                        AdsManager.shared.showInterstitialIfReady()
-                        let activityVC = UIActivityViewController(
-                            activityItems: [qrCode],
-                            applicationActivities: nil
-                        )
-                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let rootVC = windowScene.windows.first?.rootViewController {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                                rootVC.present(activityVC, animated: true)
-                            }
-                        }
-                    }
-                }) {
-                    Label("Share QR Code", systemImage: "square.and.arrow.up")
-                        .font(.headline)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 32)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.blue))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.blue.opacity(0.12), radius: 4, x: 0, y: 2)
-                }
-                .padding(.bottom, 8)
+                Spacer(minLength: 0)
+            }
             }
             .navigationBarTitle("QR Code", displayMode: .inline)
             .navigationBarItems(
                 leading: Button(action: {
-                    // Back: simply dismiss the QR screen without resetting state
+                    // Back: dismiss QR and reopen the Share Tables sheet over the create screen
                     viewModel.showingQRCodeSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        showExportSheet = true
+                    }
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
                         Text("Back")
                     }
-                },
+                }.tint(.blue),
                 trailing: Button("Done") {
                 showingQRCodeSheet = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -3691,7 +4043,7 @@ struct ContentView: View {
                     viewModel.refreshStatistics()
                     viewModel.showingQRCodeSheet = false
                 }
-            })
+            }.tint(.blue))
         }
     }
     
@@ -3705,7 +4057,6 @@ struct ContentView: View {
             self.generateQRFromDataURL(result.viewerURL.absoluteString)
         }
     }
-    
     // Create HTML content for the table display
     private func createTableHTML(arrangement: SeatingArrangement, tableName: String) -> String {
         
@@ -3964,7 +4315,6 @@ struct ContentView: View {
         default: return "#007AFF"
         }
     }
-    
     // Helper function to get person color name for JSON
     private func getPersonColorName(for id: UUID, in arrangement: SeatingArrangement) -> String {
         let color = getPersonColor(for: id, in: arrangement)
@@ -4106,6 +4456,7 @@ struct ContentView: View {
         let contacts: [String]
         var searchText: String = ""
         let onSelect: ([String]) -> Void
+        let onSmartSeating: ([String]) -> Void
         @State private var localSearchText: String = ""
         @State private var selectedContacts: Set<String> = []
         @State private var isMultiSelectMode: Bool = false
@@ -4167,6 +4518,10 @@ struct ContentView: View {
                             Spacer()
                             Text("No contacts found")
                                 .foregroundColor(.secondary)
+                                .onAppear {
+                                    // Fire the same alert flow used when permission is denied
+                                    NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
+                                }
                             Spacer()
                         }
                     } else {
@@ -4209,6 +4564,16 @@ struct ContentView: View {
                         Button("Cancel") {
                             dismiss()
                         }
+                        .tint(.blue)
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Smart Seating") {
+                            if !selectedContacts.isEmpty {
+                                onSmartSeating(Array(selectedContacts))
+                            }
+                        }
+                        .disabled(selectedContacts.isEmpty)
+                        .tint(.blue)
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
@@ -4217,6 +4582,7 @@ struct ContentView: View {
                             }
                         }
                         .disabled(selectedContacts.isEmpty)
+                        .tint(.blue)
                     }
                 }
                 .onAppear {
@@ -4277,200 +4643,6 @@ struct ContentView: View {
     }
     
     // MARK: - HistoryView
-struct HistoryView: View {
-    @ObservedObject var viewModel: SeatingViewModel
-    let dismissAction: () -> Void
-        @State private var pinnedArrangements = Set<UUID>()
-    private var nonEmptyArrangements: [SeatingArrangement] {
-        viewModel.savedArrangements.filter { !$0.people.isEmpty }
-    }
-    var body: some View {
-            VStack(spacing: 0) {
-            HStack {
-                Button(action: dismissAction) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Back")
-                    }
-                    .foregroundColor(.blue)
-                }
-                Spacer()
-                Text("History")
-                    .font(.headline)
-                Spacer()
-                Color.clear
-                    .frame(width: 50, height: 1)
-            }
-            .padding(.horizontal)
-            .padding(.top, 37) // Move up 8px from 45
-            .padding(.bottom, 2)
-                Spacer().frame(height: 6) // Add space before swipe row
-                HStack {
-                    Image(systemName: "hand.draw")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 16))
-                    Text("Swipe for more actions")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Image(systemName: "pin")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 16))
-                        .padding(.bottom, 8) // move up visually by adding bottom padding to the row below
-                    Text("←")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 16))
-                        .padding(.bottom, 8)
-                    Text("|")
-                        .foregroundColor(.gray)
-                        .font(.system(size: 16))
-                        .padding(.bottom, 8)
-                    Text("→")
-                        .foregroundColor(.red)
-                        .font(.system(size: 16))
-                        .padding(.bottom, 8)
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                        .font(.system(size: 16))
-                        .padding(.bottom, 8)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 7)
-                Spacer().frame(height: 6) // Add space after swipe row
-        List {
-                ForEach(Array(nonEmptyArrangements.enumerated()), id: \ .element.id) { idx, arrangement in
-                Button(action: {
-                            // Create a copy of the arrangement to ensure proper loading
-                            let arrangementCopy = SeatingArrangement(
-                                id: arrangement.id,
-                                title: arrangement.title,
-                                date: arrangement.date,
-                                people: arrangement.people,
-                                tableShape: arrangement.tableShape,
-                                seatAssignments: arrangement.seatAssignments
-                            )
-                            // Set viewing history first, then load arrangement
-                            viewModel.isViewingHistory = true
-                    withAnimation {
-                                viewModel.loadArrangement(arrangementCopy)
-                    }
-                            // Delay dismissal to ensure proper loading and state update
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    dismissAction()
-                            }
-                        }) {
-                            HStack {
-                                if pinnedArrangements.contains(arrangement.id) {
-                                    Image(systemName: "pin.fill")
-                                        .foregroundColor(.blue)
-                                        .padding(.trailing, 4)
-                                }
-                                
-                    VStack(alignment: .leading, spacing: 4) {
-                        let eventName = arrangement.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Text(eventName.isEmpty ? "Table #\(idx+1)" : eventName)
-                            .font(.headline)
-                        Text("\(arrangement.people.count) people • \(arrangement.tableShape.rawValue)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                                }
-                    }
-                        .padding(.vertical, 2)
-                }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button(action: {
-                                if pinnedArrangements.contains(arrangement.id) {
-                                    pinnedArrangements.remove(arrangement.id)
-                                } else {
-                                    pinnedArrangements.insert(arrangement.id)
-                                }
-                            }) {
-                                Label(
-                                    pinnedArrangements.contains(arrangement.id) ? "Unpin" : "Pin",
-                                    systemImage: pinnedArrangements.contains(arrangement.id) ? "pin.slash" : "pin"
-                                )
-                            }
-                            .tint(.blue)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let index = viewModel.savedArrangements.firstIndex(where: { $0.id == arrangement.id }) {
-                                    viewModel.deleteArrangement(at: IndexSet([index]))
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
-                        
-                        if nonEmptyArrangements.isEmpty {
-                            Text("No saved tables")
-                                .foregroundColor(.secondary)
-                                .padding(.top, 20)
-                        }
-                    }
-                .listStyle(PlainListStyle()) // Changed to PlainListStyle to reduce white space
-                .environment(\.defaultMinListRowHeight, 50)
-                .onAppear {
-                // Refresh saved arrangements when view appears
-                viewModel.refreshSavedArrangements()
-                    UITableView.appearance().separatorStyle = .singleLine
-                    UITableView.appearance().separatorColor = UIColor.systemGray4
-                    UITableView.appearance().separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
-                }
-                .onDisappear {
-                    UITableView.appearance().separatorStyle = .singleLine
-                    UITableView.appearance().separatorColor = UIColor.systemGray3
-                }
-            }
-        .navigationBarHidden(true)
-        }
-    }
-    
-    // MARK: - TableShapeButton
-    struct TableShapeButton: View {
-        let shape: TableShape
-        let isSelected: Bool
-        let action: () -> Void
-        @Environment(\.colorScheme) var colorScheme
-        
-        var body: some View {
-            Button(action: action) {
-                VStack(spacing: 2) { // was 4, now 2 for closer label
-                    switch shape {
-                    case .round:
-                        Circle()
-                            .stroke(isSelected ? Color.blue : Color.gray.opacity(0.18), lineWidth: isSelected ? 3 : 2)
-                            .frame(width: 60, height: 60)
-                    case .rectangle:
-                        Rectangle()
-                            .stroke(isSelected ? Color.blue : Color.gray.opacity(0.18), lineWidth: isSelected ? 3 : 2)
-                            .frame(width: 80, height: 60)
-                    case .square:
-                        Rectangle()
-                            .stroke(isSelected ? Color.blue : Color.gray.opacity(0.18), lineWidth: isSelected ? 3 : 2)
-                            .frame(width: 60, height: 60)
-                    }
-                    Text(shape.displayName.replacingOccurrences(of: " Table", with: ""))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isSelected ? .blue : .gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 1)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 100)
-                }
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-                )
-            }
-        }
-    }
-    
-    // MARK: - TermsView
 struct TermsView: View {
     let onDismiss: () -> Void
     @State private var isLoading = true
@@ -4647,7 +4819,7 @@ struct TermsView: View {
                                             .padding(.vertical, 12)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 12)
-                                                    .fill(Color.blue)
+                                                    .fill(Color.accentColor)
                                             )
                                         }
                                         .padding(.bottom, 20)
@@ -4863,7 +5035,7 @@ struct TermsView: View {
                     .shadow(color: Color.black.opacity(0.12), radius: 6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.blue, lineWidth: 1.5)
+                            .stroke(Color.accentColor, lineWidth: 1.5)
                     )
                     .frame(width: 120) // Fixed width to match non-editing state
                     .zIndex(100)
@@ -4918,7 +5090,6 @@ struct TermsView: View {
             .frame(height: keyboardHeight / 2) // Use partial height to reduce distortion
         }
     }
-    
     // Profile editor view with enhanced design
     private var profileEditorView: some View {
         NavigationView {
@@ -5017,7 +5188,7 @@ struct TermsView: View {
                             }) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.blue)
+                                        .fill(Color.accentColor)
                                         .frame(width: 44, height: 44)
                                         .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                                     Image(systemName: "camera.fill")
@@ -5172,14 +5343,13 @@ struct TermsView: View {
         }
         viewModel.saveCurrentTableState()
         let exportText = viewModel.exportAllTables()
-        AdsManager.shared.showInterstitialIfReady()
-        let activityVC = UIActivityViewController(
-            activityItems: [exportText],
-            applicationActivities: nil
-        )
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        AdsManager.shared.showInterstitialThen {
+            let activityVC = UIActivityViewController(
+                activityItems: [exportText],
+                applicationActivities: nil
+            )
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootVC = windowScene.windows.first?.rootViewController {
                 rootVC.present(activityVC, animated: true) {
                     // After share sheet is dismissed, return to welcome
                     DispatchQueue.main.async {
@@ -5189,7 +5359,6 @@ struct TermsView: View {
             }
         }
     }
-    
     // Function to share as image
     private func shareImage() {
         // Gate image export behind Pro
@@ -5278,7 +5447,7 @@ struct TermsView: View {
                                             .foregroundColor(getPersonColor(for: person.id, in: viewModel.currentArrangement))
                                     )
                                 
-                                Text(person.name)
+                                Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
                                     .font(.system(size: 16))
                                 
                                 if person.isLocked {
@@ -5311,6 +5480,356 @@ struct TermsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - ShareLink helpers (image export)
+    private func sharePreviewTitle() -> String {
+        let eventTitle = viewModel.currentArrangement.eventTitle ?? ""
+        let displayTitle = eventTitle.isEmpty ? viewModel.currentArrangement.title : eventTitle
+        let (formatted, emoji) = UIHelpers.formatEventTitle(displayTitle)
+        return "\(emoji) \(formatted)"
+    }
+
+    private func buildShareLayoutView() -> some View {
+        let titleText = sharePreviewTitle()
+        return VStack(spacing: 12) {
+            // Header with event/title
+            Text(titleText)
+                .font(.system(size: 22, weight: .bold))
+                .multilineTextAlignment(.center)
+
+            // Secondary info row
+            HStack(spacing: 6) {
+                let peopleCount = viewModel.currentArrangement.people.count
+                Text("People: \(peopleCount)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("•")
+                    .foregroundColor(.secondary)
+                let shapeEmoji = UIHelpers.getShapeEmoji(for: viewModel.currentArrangement.tableShape)
+                Text("\(shapeEmoji) \(viewModel.currentArrangement.tableShape.rawValue.capitalized)")
+                    .font(.subheadline)
+            }
+
+            // Table layout visualization
+            TableView(
+                arrangement: viewModel.currentArrangement,
+                getPersonColor: { id in getPersonColor(for: id, in: viewModel.currentArrangement) },
+                onPersonTap: { _ in }
+            )
+            .frame(width: 360, height: 300)
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(12)
+    }
+    // Build a composite view including ALL non-empty tables with names beneath previews
+    private func buildAllTablesCompositeShareView() -> some View {
+        let tables: [(id: Int, table: SeatingArrangement)] = viewModel.tableCollection.tables
+            .filter { !$0.value.people.isEmpty }
+            .sorted { $0.key < $1.key }
+            .enumerated()
+            .map { (offset, element) in (id: offset + 1, table: element.value) }
+
+        let titleText = sharePreviewTitle()
+        let peopleTotal = tables.reduce(0) { $0 + $1.table.people.count }
+
+        // Use a scroll container with a fixed max height so long exports are not clipped
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+            // Top header
+            VStack(spacing: 6) {
+                Text(titleText)
+                    .font(.system(size: 22, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Text("People: \(peopleTotal)")
+                        .font(.subheadline).fontWeight(.medium)
+                    Text("•").foregroundColor(.secondary)
+                    Text("Tables: \(tables.count)")
+                        .font(.subheadline).fontWeight(.medium)
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+                ForEach(Array(tables.enumerated()), id: \.offset) { _, item in
+                    VStack(alignment: .leading, spacing: 8) {
+                    let table = item.table
+                    let tableName = table.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Table \(item.id)" : table.title
+                    Text(tableName)
+                        .font(.headline)
+
+                    SharePreviewSimpleTableView(
+                        arrangement: table,
+                        getPersonColor: { id in
+                            if let person = table.people.first(where: { $0.id == id }) {
+                                if person.colorIndex < personColors.count {
+                                    return personColors[person.colorIndex]
+                                } else if let idx = table.people.firstIndex(where: { $0.id == id }) {
+                                    return personColors[idx % personColors.count]
+                                }
+                            }
+                            return .blue
+                        }
+                    )
+                    .frame(height: 140)
+                    .padding(.horizontal, 10)
+
+                    if !table.people.isEmpty {
+                        let orderedPeople = table.people
+                            .sorted { a, b in
+                                let seatA = table.seatAssignments[a.id] ?? 0
+                                let seatB = table.seatAssignments[b.id] ?? 0
+                                return seatA < seatB
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(orderedPeople.enumerated()), id: \.element.id) { idx, person in
+                                HStack(spacing: 8) {
+                                    Text("\(idx + 1).")
+                                        .foregroundColor(.blue)
+                                        .font(.footnote.bold())
+                                        .frame(width: 18, alignment: .trailing)
+                                    Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
+                                        .font(.footnote)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    }
+                    .padding(12)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(.systemGray5), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(16)
+            .background(Color.white)
+            .cornerRadius(14)
+        }
+    }
+
+    // Build a single composite view that includes ALL non-empty tables for image sharing
+    private func buildAllTablesShareView() -> some View {
+        // Gather non-empty tables in ascending order of id
+        let tables: [(id: Int, table: SeatingArrangement)] = viewModel.tableCollection.tables
+            .filter { !$0.value.people.isEmpty }
+            .sorted { $0.key < $1.key }
+            .enumerated()
+            .map { (offset, element) in (id: offset + 1, table: element.value) }
+
+        let eventTitle = viewModel.currentArrangement.eventTitle ?? ""
+        let (formattedTitle, emoji) = UIHelpers.formatEventTitle(eventTitle)
+        let peopleTotal = tables.reduce(0) { $0 + $1.table.people.count }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            // Top summary header
+            VStack(spacing: 6) {
+                if !eventTitle.isEmpty {
+                    Text("\(emoji) \(formattedTitle)")
+                        .font(.system(size: 22, weight: .bold))
+                        .multilineTextAlignment(.center)
+                }
+                HStack(spacing: 8) {
+                    Text("People: \(peopleTotal)")
+                        .font(.subheadline).fontWeight(.medium)
+                    Text("•").foregroundColor(.secondary)
+                    Text("Tables: \(tables.count)")
+                        .font(.subheadline).fontWeight(.medium)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            // Each table section
+            ForEach(Array(tables.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 8) {
+                    let table = item.table
+                    let tableName = table.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Table \(item.id)" : table.title
+                    Text(tableName)
+                        .font(.headline)
+                    SharePreviewSimpleTableView(
+                        arrangement: table,
+                        getPersonColor: { id in
+                            if let person = table.people.first(where: { $0.id == id }) {
+                                if person.colorIndex < personColors.count {
+                                    return personColors[person.colorIndex]
+                                } else if let idx = table.people.firstIndex(where: { $0.id == id }) {
+                                    return personColors[idx % personColors.count]
+                                }
+                            }
+                            return .blue
+                        }
+                    )
+                    .frame(height: 140)
+                    .padding(.horizontal, 10)
+                    // Names list below preview
+                    if !table.people.isEmpty {
+                        let orderedPeople = table.people
+                            .sorted { a, b in
+                                let seatA = table.seatAssignments[a.id] ?? 0
+                                let seatB = table.seatAssignments[b.id] ?? 0
+                                return seatA < seatB
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(orderedPeople.enumerated()), id: \.element.id) { idx, person in
+                                HStack(spacing: 8) {
+                                    Text("\(idx + 1).")
+                                        .foregroundColor(.blue)
+                                        .font(.footnote.bold())
+                                        .frame(width: 18, alignment: .trailing)
+                                    Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
+                                        .font(.footnote)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(12)
+                .background(Color.white)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray5), lineWidth: 1)
+                )
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(14)
+    }
+
+// A lightweight, file-scoped table preview usable outside of AllTablesExportView
+private struct SharePreviewSimpleTableView: View {
+    let arrangement: SeatingArrangement
+    let getPersonColor: (UUID) -> Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            ZStack {
+                // Draw table shape
+                Group {
+                    switch arrangement.tableShape {
+                    case .round:
+                        Circle()
+                            .stroke(Color.gray.opacity(0.4), lineWidth: 3)
+                            .background(Circle().fill(Color.gray.opacity(0.1)))
+                            .frame(width: min(width, height) * 0.95, height: min(width, height) * 0.95)
+                            .position(x: width/2, y: height/2)
+                    case .rectangle:
+                        Rectangle()
+                            .stroke(Color.gray.opacity(0.4), lineWidth: 3)
+                            .background(Rectangle().fill(Color.gray.opacity(0.1)))
+                            .frame(width: width * 0.62, height: height * 0.75)
+                            .position(x: width/2, y: height/2)
+                    case .square:
+                        Rectangle()
+                            .stroke(Color.gray.opacity(0.4), lineWidth: 3)
+                            .background(Rectangle().fill(Color.gray.opacity(0.1)))
+                            .frame(width: min(width, height) * 0.9, height: min(width, height) * 0.9)
+                            .position(x: width/2, y: height/2)
+                    }
+                }
+                // Place people around the perimeter
+                ForEach(Array(arrangement.people.enumerated()), id: \.element.id) { index, person in
+                    let pos = calculatePersonPosition(
+                        index: index,
+                        total: arrangement.people.count,
+                        tableShape: arrangement.tableShape,
+                        width: width,
+                        height: height
+                    )
+                    ZStack {
+                        Circle()
+                            .fill(getPersonColor(person.id).opacity(0.7))
+                            .frame(width: 24, height: 24)
+                        Text(computeInitials(from: person.name))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .position(x: pos.x, y: pos.y)
+                }
+            }
+        }
+        .frame(height: 100)
+    }
+
+    private func calculatePersonPosition(index: Int, total: Int, tableShape: TableShape, width: CGFloat, height: CGFloat) -> CGPoint {
+        switch tableShape {
+        case .round:
+            let radius = min(width, height) * 0.45
+            let angle = 2 * .pi * CGFloat(index) / CGFloat(max(total, 1)) - .pi / 2
+            let x = width/2 + radius * cos(angle)
+            let y = height/2 + radius * sin(angle)
+            return CGPoint(x: x, y: y)
+        case .rectangle:
+            let w = width * 0.62
+            let h = height * 0.75
+            let perimeter = 2 * (w + h)
+            let distance = perimeter * CGFloat(index) / CGFloat(max(total, 1))
+            if distance < w {
+                return CGPoint(x: (width-w)/2 + distance, y: (height-h)/2)
+            } else if distance < w + h {
+                return CGPoint(x: (width+w)/2, y: (height-h)/2 + (distance-w))
+            } else if distance < 2*w + h {
+                return CGPoint(x: (width+w)/2 - (distance-w-h), y: (height+h)/2)
+            } else {
+                return CGPoint(x: (width-w)/2, y: (height+h)/2 - (distance-2*w-h))
+            }
+        case .square:
+            let side = min(width, height) * 0.9
+            let perimeter = 4 * side
+            let distance = perimeter * CGFloat(index) / CGFloat(max(total, 1))
+            if distance < side {
+                return CGPoint(x: (width-side)/2 + distance, y: (height-side)/2)
+            } else if distance < 2*side {
+                return CGPoint(x: (width+side)/2, y: (height-side)/2 + (distance-side))
+            } else if distance < 3*side {
+                return CGPoint(x: (width+side)/2 - (distance-2*side), y: (height+side)/2)
+            } else {
+                return CGPoint(x: (width-side)/2, y: (height+side)/2 - (distance-3*side))
+            }
+        }
+    }
+}
+    private func renderImage<Content: View>(from view: Content, scale: CGFloat = UIScreen.main.scale) -> UIImage {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        renderer.isOpaque = true
+        if let image = renderer.uiImage { return image }
+        // Fallback tiny white image
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let renderer2 = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2), format: format)
+        return renderer2.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+    }
+
+    private func previewTableImage() -> UIImage {
+        renderImage(from: buildShareLayoutView(), scale: 2)
+    }
+
+    // Build a composite view of all non-empty tables for image sharing (scoped to AllTablesExportView)
+    // Removed duplicate placeholder
+
+    private func previewAllTablesImage() -> UIImage {
+        let composed = buildAllTablesCompositeShareView()
+            .frame(maxWidth: UIScreen.main.bounds.width * 0.94)
+        return renderImage(from: composed, scale: 2)
+    }
+
+    private func generateShareableTableImage() -> TableLayoutImage {
+        let image = renderImage(from: buildShareLayoutView(), scale: UIScreen.main.scale)
+        return TableLayoutImage(image: image)
     }
 
     // Combined export function
@@ -5350,14 +5869,13 @@ struct TermsView: View {
 
     // Helper to share the export text
     private func shareExportText(_ text: String) {
-        AdsManager.shared.showInterstitialIfReady()
-        let activityVC = UIActivityViewController(
-            activityItems: [text],
-            applicationActivities: nil
-        )
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        AdsManager.shared.showInterstitialThen {
+            let activityVC = UIActivityViewController(
+                activityItems: [text],
+                applicationActivities: nil
+            )
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootVC = windowScene.windows.first?.rootViewController {
                 rootVC.present(activityVC, animated: true) {
                     DispatchQueue.main.async {
                         resetAndShowWelcomeScreen()
@@ -5500,7 +6018,6 @@ struct TermsView: View {
         historyOriginSnapshot = nil
         historyOriginWasEmptyState = false
     }
-
     private func handleHistoryDismiss() {
         showingHistory = false
         // Ensure table name is always 'Table X' if empty or 'New Arrangement'
@@ -5554,6 +6071,8 @@ struct TermsView: View {
                 .contentShape(Rectangle())
                 .zIndex(2)
                 .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("btn.add")
+                .onboardingAnchor(.add)
 
                 Button(action: { showingDeleteAllPeopleAlert = true }) {
                     Image(systemName: "trash")
@@ -5678,7 +6197,6 @@ struct TermsView: View {
     // Keeping the name stubbed to avoid accidental references. Not used anymore.
     private var peopleRows: [AnyView] { [] }
 }
-
 // Create a new comprehensive export view to display all tables
 struct AllTablesExportView: View {
     @ObservedObject var viewModel: SeatingViewModel
@@ -5687,6 +6205,8 @@ struct AllTablesExportView: View {
     @State private var isEditingTitle = false
     @State private var isShowingShareSheet = false
     @State private var shareText: String = ""
+    @Binding var parentExportItems: [Any]
+    @Binding var parentIsShowingShareSheet: Bool
     
     // Add bindings for navigation state
     @Binding var showEffortlessScreen: Bool
@@ -5699,10 +6219,12 @@ struct AllTablesExportView: View {
         .cyan, .brown
     ]
     
-    init(viewModel: SeatingViewModel, showEffortlessScreen: Binding<Bool>, showingTutorial: Binding<Bool>) {
+    init(viewModel: SeatingViewModel, showEffortlessScreen: Binding<Bool>, showingTutorial: Binding<Bool>, parentExportItems: Binding<[Any]>, parentIsShowingShareSheet: Binding<Bool>) {
         self.viewModel = viewModel
         self._showEffortlessScreen = showEffortlessScreen
         self._showingTutorial = showingTutorial
+        self._parentExportItems = parentExportItems
+        self._parentIsShowingShareSheet = parentIsShowingShareSheet
         // Initialize with current arrangement title
         _arrangementTitle = State(initialValue: viewModel.currentArrangement.title)
     }
@@ -5728,6 +6250,7 @@ struct AllTablesExportView: View {
             GeometryReader { geometry in
                 let width = geometry.size.width
                 let height = geometry.size.height
+                let dotSize = max(22, min(30, min(width, height) * 0.18))
                 ZStack {
                     // Draw table shape
                     Group {
@@ -5742,13 +6265,13 @@ struct AllTablesExportView: View {
                             Rectangle()
                                 .stroke(Color.gray.opacity(0.4), lineWidth: 3)
                                 .background(Rectangle().fill(Color.gray.opacity(0.1)))
-                                .frame(width: width * 0.62, height: height * 0.75) // Adjusted for preview
+                                .frame(width: width * 0.72, height: height * 0.75) // Slightly wider for readability
                                 .position(x: width/2, y: height/2)
                         case .square:
                             Rectangle()
                                 .stroke(Color.gray.opacity(0.4), lineWidth: 3)
                                 .background(Rectangle().fill(Color.gray.opacity(0.1)))
-                                .frame(width: min(width, height) * 0.9, height: min(width, height) * 0.9)
+                                .frame(width: min(width, height) * 0.92, height: min(width, height) * 0.92)
                                 .position(x: width/2, y: height/2)
                         }
                     }
@@ -5764,16 +6287,16 @@ struct AllTablesExportView: View {
                         ZStack {
                             Circle()
                                 .fill(getPersonColor(person.id).opacity(0.7))
-                                .frame(width: 24, height: 24)
+                                .frame(width: dotSize, height: dotSize)
                             Text(computeInitials(from: person.name))
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: max(10, dotSize * 0.42), weight: .bold))
                                 .foregroundColor(.white)
                         }
                         .position(x: pos.x, y: pos.y)
                     }
                 }
             }
-            .frame(height: 100)
+            .frame(height: 150)
         }
         
         // Helper to calculate perimeter positions
@@ -5786,7 +6309,7 @@ struct AllTablesExportView: View {
                 let y = height/2 + radius * sin(angle)
                 return CGPoint(x: x, y: y)
             case .rectangle:
-                let w = width * 0.62 // Match the preview width
+                let w = width * 0.72 // Match the preview width above
                 let h = height * 0.75
                 let perimeter = 2 * (w + h)
                 let distance = perimeter * CGFloat(index) / CGFloat(max(total, 1))
@@ -5800,7 +6323,7 @@ struct AllTablesExportView: View {
                     return CGPoint(x: (width-w)/2, y: (height+h)/2 - (distance-2*w-h))
                 }
             case .square:
-                let side = min(width, height) * 0.9
+                let side = min(width, height) * 0.92
                 let perimeter = 4 * side
                 let distance = perimeter * CGFloat(index) / CGFloat(max(total, 1))
                 if distance < side {
@@ -5875,6 +6398,318 @@ struct AllTablesExportView: View {
         let finalTitle = displayTitle.isEmpty ? "New Arrangement" : displayTitle
         let (formattedTitle, emoji) = UIHelpers.formatEventTitle(finalTitle)
         return "\(emoji) \(formattedTitle)"
+    }
+
+    // MARK: - ShareLink helpers (image export, local to AllTablesExportView)
+    private func sharePreviewTitle() -> String {
+        composedEventTitle()
+    }
+
+    private func buildShareLayoutView() -> some View {
+        let titleText = sharePreviewTitle()
+        return VStack(spacing: 12) {
+            // Header
+            Text(titleText)
+                .font(.system(size: 22, weight: .bold))
+                .multilineTextAlignment(.center)
+
+            // Info row
+            HStack(spacing: 6) {
+                let peopleCount = viewModel.currentArrangement.people.count
+                Text("People: \(peopleCount)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("•").foregroundColor(.secondary)
+                let shapeEmoji = UIHelpers.getShapeEmoji(for: viewModel.currentArrangement.tableShape)
+                Text("\(shapeEmoji) \(viewModel.currentArrangement.tableShape.rawValue.capitalized)")
+                    .font(.subheadline)
+            }
+
+            // Table preview for the current arrangement
+            SimpleTableView(
+                arrangement: viewModel.currentArrangement,
+                getPersonColor: { id in personColor(for: id, in: viewModel.currentArrangement) }
+            )
+            .frame(height: 150)
+            .padding(.horizontal, 12)
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+    }
+
+    private func renderImage<Content: View>(from view: Content, scale: CGFloat = UIScreen.main.scale) -> UIImage {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        renderer.isOpaque = true
+        if let image = renderer.uiImage { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let fallback = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2), format: format)
+        return fallback.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+    }
+    // Build a composite image of ALL non-empty tables with names (local to AllTablesExportView)
+    private func buildAllTablesCompositeShareView() -> some View {
+        let tables: [(id: Int, table: SeatingArrangement)] = viewModel.tableCollection.tables
+            .filter { !$0.value.people.isEmpty }
+            .sorted { $0.key < $1.key }
+            .enumerated()
+            .map { (offset, element) in (id: offset + 1, table: element.value) }
+
+        let titleText = sharePreviewTitle()
+        let peopleTotal = tables.reduce(0) { $0 + $1.table.people.count }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(spacing: 6) {
+                Text(titleText)
+                    .font(.system(size: 22, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Text("People: \(peopleTotal)")
+                        .font(.subheadline).fontWeight(.medium)
+                    Text("•").foregroundColor(.secondary)
+                    Text("Tables: \(tables.count)")
+                        .font(.subheadline).fontWeight(.medium)
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            ForEach(Array(tables.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 8) {
+                    let table = item.table
+                    let tableName = table.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Table \(item.id)" : table.title
+                    Text(tableName)
+                        .font(.headline)
+                    SimpleTableView(
+                        arrangement: table,
+                        getPersonColor: { id in personColor(for: id, in: table) }
+                    )
+                    .frame(height: 140)
+                    .padding(.horizontal, 10)
+                    if !table.people.isEmpty {
+                        let orderedPeople = table.people
+                            .sorted { a, b in
+                                let seatA = table.seatAssignments[a.id] ?? 0
+                                let seatB = table.seatAssignments[b.id] ?? 0
+                                return seatA < seatB
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(orderedPeople.enumerated()), id: \.element.id) { idx, person in
+                                HStack(spacing: 8) {
+                                    Text("\(idx + 1).")
+                                        .foregroundColor(.blue)
+                                        .font(.footnote.bold())
+                                        .frame(width: 18, alignment: .trailing)
+                                    Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
+                                        .font(.footnote)
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(12)
+                .background(Color.white)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray5), lineWidth: 1)
+                )
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(14)
+    }
+
+    private func previewAllTablesImage() -> UIImage {
+        let composed = buildAllTablesCompositeShareView()
+            .frame(maxWidth: UIScreen.main.bounds.width * 0.94)
+        return renderImage(from: composed, scale: 2)
+    }
+
+    private func previewTableImage() -> UIImage {
+        renderImage(from: buildShareLayoutView(), scale: 2)
+    }
+
+    // Generate a PNG file URL for the current table layout (works well with Instagram)
+    private func generateShareableImageURL() -> URL? {
+        let image = self.renderImage(from: self.buildShareLayoutView(), scale: UIScreen.main.scale)
+        guard let data = image.pngData() else { return nil }
+        let tmp = FileManager.default.temporaryDirectory
+        let fileURL = tmp.appendingPathComponent("SeatMaker-Table-Layout.png")
+        try? FileManager.default.removeItem(at: fileURL)
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+
+    private func presentActivity(items: [Any]) {
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+    }
+
+    // Extracted share options UI to avoid large expressions in body
+    private var shareOptionsView: some View {
+        VStack(spacing: 6) {
+            Text("Share Options")
+                .font(.headline)
+                .padding(.bottom, 2)
+            // Use a single fixed width for all share buttons to ensure consistent sizing
+            // Increase width by 5 to satisfy spacing request
+            let fixedButtonWidth = min(UIScreen.main.bounds.width * 0.88, 500) + 5
+
+            // Share as Text (free)
+            Button(action: {
+                // Cancel any previously queued share actions awaiting ad dismissal
+                AdsManager.shared.cancelPendingCompletion()
+                // Save a snapshot to history before sharing
+                viewModel.saveCurrentArrangement()
+                let text = viewModel.exportAllTables()
+                shareText = text
+                // Prepare items for the single root ActivityView sheet
+                parentExportItems = [text]
+                AdsManager.shared.showInterstitialThen {
+                    // Dismiss this export sheet first to avoid multiple-sheet conflicts
+                    dismiss()
+                    // Reset to a fresh arrangement underneath the share sheet
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.resetAndShowWelcomeScreen()
+                        showEffortlessScreen = true
+                    }
+                    // Present the share sheet after the dismissal animation finishes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        parentIsShowingShareSheet = true
+                    }
+                }
+            }) {
+                Label("  Share as Text  ", systemImage: "square.and.arrow.up")
+                    .foregroundColor(.white)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemBlue))
+                    )
+                    .frame(width: fixedButtonWidth)
+                    .frame(height: 56)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.bottom, 4)
+
+            // Share as Image (always loads the picture, no paywall) – include ALL tables in one image
+            Button(action: {
+                // Share as UIImage to avoid file-provider/share-mode issues for temporary URLs
+                // Cancel any previously queued share actions awaiting ad dismissal
+                AdsManager.shared.cancelPendingCompletion()
+                // Save a snapshot to history before sharing
+                viewModel.saveCurrentArrangement()
+                // Include ALL non-empty tables in one composite image (with table names)
+                let image = previewAllTablesImage()
+                // Add a short promo link to the app at the end (official App Store link)
+                let promo = "\n\nMade with Seat Maker — get the app: https://apps.apple.com/us/app/seat-maker/id6748284141"
+                parentExportItems = [image, promo]
+                AdsManager.shared.showInterstitialThen {
+                    // Dismiss this export sheet first to avoid multiple-sheet conflicts
+                    dismiss()
+                    // Reset to a fresh arrangement underneath the share sheet
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.resetAndShowWelcomeScreen()
+                        showEffortlessScreen = true
+                    }
+                    // Present the share sheet after the dismissal animation finishes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        parentIsShowingShareSheet = true
+                    }
+                }
+            }) {
+                Label("Share as Image", systemImage: "photo")
+                    .foregroundColor(.white)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            // Use a distinct but fitting color for image sharing
+                            .fill(Color.purple)
+                    )
+                    .frame(width: fixedButtonWidth)
+                    .frame(height: 56)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.bottom, 4)
+
+            // QR Code
+            Button(action: {
+                // Cancel any previously queued share actions awaiting ad dismissal
+                AdsManager.shared.cancelPendingCompletion()
+                generateAndShowQRCode()
+            }) {
+                // White background with blue border, include QR icon
+                Label(" Generate QR ", systemImage: "qrcode")
+                    .foregroundColor(.blue)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    )
+                    .frame(width: fixedButtonWidth)
+                    .frame(height: 56)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    // Theme swatch view that binds to appTheme safely inside SettingsViewImpl
+    private struct ThemeSwatch: View {
+        @Binding var appTheme: String
+        let id: String
+        let label: String
+        let colors: [Color]
+        var body: some View {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) { appTheme = id }
+            }) {
+                VStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 34, height: 26)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(appTheme == id ? Color.primary.opacity(0.6) : Color.clear, lineWidth: 2)
+                        )
+                    Text(label)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel("Select \(label) theme")
+        }
     }
 
     var body: some View {
@@ -5962,184 +6797,154 @@ struct AllTablesExportView: View {
                 .padding(.horizontal)
                 
                 // Share options - moved higher on the screen above tables
-                VStack {
-                    Text("Share Options")
-                        .font(.headline)
-                        .padding(.bottom, 2) // Was 4, now 2 (move up 2px)
-                    Button(action: {
-                        // Build export text and show system share sheet (no auto group chat)
-                        let text = viewModel.exportAllTables()
-                        shareText = text
-                        AdsManager.shared.showInterstitialIfReady()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                            isShowingShareSheet = true
-                        }
-                    }) {
-                        Label("Share as Text", systemImage: "square.and.arrow.up")
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24 + 35)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.blue)
-                            )
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.6 + 35)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .sheet(isPresented: $isShowingShareSheet) {
-                        ShareSheet(activityItems: [shareText])
-                    }
-                    .padding(.bottom, 6)
-                    Button(action: { generateAndShowQRCode() }) {
-                        Label("Generate QR Code", systemImage: "qrcode")
-                            .foregroundColor(.blue)
-                            .padding(.vertical, 12) // Increased from 10 to 12 to meet minimum touch target
-                            .padding(.horizontal, 24 + 15)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.blue, lineWidth: 1.5)
-                            )
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.6 + 15)
-                    }
-                }
-                .padding(.bottom, 18) // Was 20, now 18 (move up 2px)
+                shareOptionsView
+                    .padding(.bottom, 18) // Was 20, now 18 (move up 2px)
                 
-                // Show only tables with people, with sequential numbering
-                ForEach(nonEmptyTables, id: \.id) { tableId, arrangement in
-                    VStack(spacing: 16) {
-                        // Combined table header, visualization, and people in one box
-                        VStack(spacing: 12) {
-                            // Table header with editable name
-                            HStack {
-                                if editingTableId == tableId {
-                                    // Show text field when editing
-                                    TextField("Table Name", text: $editingTableName)
-                                        .font(.system(size: 20, weight: .bold))
-                                        .textFieldStyle(PlainTextFieldStyle())
-                                        .onSubmit {
-                                            saveEditedTableName(tableId: tableId)
-                                        }
-                                        .onTapGesture {
-                                            // Prevent tap from dismissing
-                                        }
-                                    Button("Save") {
-                                        saveEditedTableName(tableId: tableId)
-                                    }
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 14, weight: .medium))
-                                } else {
-                                    let displayName = (arrangement.title.isEmpty ? (viewModel.currentTableName.isEmpty ? "Table \(tableId)" : viewModel.currentTableName) : arrangement.title)
-                                    Text(displayName)
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                        .padding(.bottom, 2)
-                                    Button(action: {
-                                        startEditingTableName(tableId: tableId, currentName: arrangement.title.isEmpty ? "Table \(tableId)" : arrangement.title)
-                                    }) {
-                                        Image(systemName: "pencil")
-                                            .foregroundColor(.blue)
-                                            .font(.system(size: 16, weight: .medium))
-                                    }
-                                }
-                                Spacer()
-                                // Get shape emoji using our helper function
-                                let shape = UIHelpers.getShapeEmoji(for: arrangement.tableShape)
-                                Text("\(shape)")
-                                    .font(.subheadline)
-                            }
-                            .padding(.horizontal, 16)
-                            
-                            // Table visualization
-                            SimpleTableView(
-                                arrangement: arrangement,
-                                getPersonColor: { id in personColor(for: id, in: arrangement) }
-                            )
-                            .frame(height: 140)
-                            .padding(.horizontal, 16)
-                            
-                            // People at this table
-                            if !arrangement.people.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("People at this table:")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                        .padding(.horizontal, 16)
-                                    
-                                    // Show first 4 people, then "and X more" if needed
-                                    let sortedPeople = arrangement.people.sorted { a, b in
-                                        let seatA = arrangement.seatAssignments[a.id] ?? 0
-                                        let seatB = arrangement.seatAssignments[b.id] ?? 0
-                                        return seatA < seatB
-                                    }
-                                    
-                                    let displayPeople = sortedPeople.prefix(4)
-                                    let remainingCount = sortedPeople.count - displayPeople.count
-                                    
+                // Show only tables with people, in an adaptive grid for wider/phone screens
+                let availableWidth = UIScreen.main.bounds.width
+                let minCard = min(360, availableWidth * 0.9)
+                let columns = [GridItem(.adaptive(minimum: minCard), spacing: 14, alignment: .top)]
+                LazyVGrid(columns: columns, alignment: .center, spacing: 16) {
+                        ForEach(nonEmptyTables, id: \.id) { tableId, arrangement in
+                            VStack(spacing: 16) {
+                                // Combined table header, visualization, and people in one box
+                                VStack(spacing: 12) {
+                                    // Table header with editable name
                                     HStack {
-                                        ForEach(Array(displayPeople), id: \.id) { person in
-                                            PersonBubble(
-                                                person: person,
-                                                color: personColor(for: person.id, in: arrangement)
-                                            )
+                                        if editingTableId == tableId {
+                                            // Show text field when editing
+                                            TextField("Table Name", text: $editingTableName)
+                                                .font(.system(size: 20, weight: .bold))
+                                                .textFieldStyle(PlainTextFieldStyle())
+                                                .onSubmit {
+                                                    saveEditedTableName(tableId: tableId)
+                                                }
+                                                .onTapGesture {
+                                                    // Prevent tap from dismissing
+                                                }
+                                            Button("Save") {
+                                                saveEditedTableName(tableId: tableId)
+                                            }
+                                            .foregroundColor(.blue)
+                                            .font(.system(size: 14, weight: .medium))
+                                        } else {
+                                            let displayName = (arrangement.title.isEmpty ? (viewModel.currentTableName.isEmpty ? "Table \(tableId)" : viewModel.currentTableName) : arrangement.title)
+                                            Text(displayName)
+                                                .font(.system(size: 20, weight: .bold))
+                                                .foregroundColor(.primary)
+                                                .lineLimit(1)
+                                                .truncationMode(.tail)
+                                                .padding(.bottom, 2)
+                                            Button(action: {
+                                                startEditingTableName(tableId: tableId, currentName: arrangement.title.isEmpty ? "Table \(tableId)" : arrangement.title)
+                                            }) {
+                                                Image(systemName: "pencil")
+                                                    .foregroundColor(.blue)
+                                                    .font(.system(size: 16, weight: .medium))
+                                            }
                                         }
-                                        
-                                        if remainingCount > 0 {
-                                            Text("+\(remainingCount) more")
-                                                .font(.system(size: 12))
-                                                .padding(6)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(Color.secondary.opacity(0.2))
-                                                )
-                                                .foregroundColor(.secondary)
-                                        }
-                                        
                                         Spacer()
+                                        // Get shape emoji using our helper function
+                                        let shape = UIHelpers.getShapeEmoji(for: arrangement.tableShape)
+                                        Text("\(shape)")
+                                            .font(.subheadline)
                                     }
                                     .padding(.horizontal, 16)
-                                     // Per-table share as text (single table)
-                                     Button(action: {
-                                         let text = viewModel.exportSingleTable(arrangement)
-                                         shareText = text
-                                         AdsManager.shared.showInterstitialIfReady()
-                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                                             isShowingShareSheet = true
-                                         }
-                                     }) {
-                                         HStack(spacing: 6) {
-                                             Image(systemName: "square.and.arrow.up")
-                                             Text("Share This Table")
-                                                 .fontWeight(.semibold)
-                                         }
-                                         .font(.system(size: 14))
-                                         .padding(.vertical, 8)
-                                         .padding(.horizontal, 12)
-                                         .background(
-                                             RoundedRectangle(cornerRadius: 10)
-                                                 .fill(Color.blue.opacity(0.1))
-                                         )
-                                         .foregroundColor(.blue)
-                                     }
-                                     .padding(.horizontal, 16)
-                                     .padding(.top, 6)
+                                    
+                                    // Table visualization
+                                    SimpleTableView(
+                                        arrangement: arrangement,
+                                        getPersonColor: { id in personColor(for: id, in: arrangement) }
+                                    )
+                                    .frame(height: 160)
+                                    .padding(.horizontal, 16)
+                                    
+                                    // People at this table
+                                    if !arrangement.people.isEmpty {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("People at this table:")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal, 16)
+                                            
+                                            // Show first 4 people, then "and X more" if needed
+                                            let sortedPeople = arrangement.people.sorted { a, b in
+                                                let seatA = arrangement.seatAssignments[a.id] ?? 0
+                                                let seatB = arrangement.seatAssignments[b.id] ?? 0
+                                                return seatA < seatB
+                                            }
+                                            
+                                            let displayPeople = sortedPeople.prefix(4)
+                                            let remainingCount = sortedPeople.count - displayPeople.count
+                                            
+                                            HStack {
+                                                ForEach(Array(displayPeople), id: \.id) { person in
+                                                    PersonBubble(
+                                                        person: person,
+                                                        color: personColor(for: person.id, in: arrangement)
+                                                    )
+                                                }
+                                                
+                                                if remainingCount > 0 {
+                                                    Text("+\(remainingCount) more")
+                                                        .font(.system(size: 12))
+                                                        .padding(6)
+                                                        .background(
+                                                            Capsule()
+                                                                .fill(Color.secondary.opacity(0.2))
+                                                        )
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                
+                                                Spacer()
+                                            }
+                                            .padding(.horizontal, 16)
+                                             // Per-table share as text (single table)
+                                             Button(action: {
+                                                 let text = viewModel.exportSingleTable(arrangement)
+                                                 shareText = text
+                                                 parentExportItems = [text]
+                                                 AdsManager.shared.showInterstitialThen {
+                                                     // Dismiss export sheet first to avoid multiple-sheet conflicts
+                                                     dismiss()
+                                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                                         parentIsShowingShareSheet = true
+                                                     }
+                                                 }
+                                             }) {
+                                                 HStack(spacing: 6) {
+                                                     Image(systemName: "square.and.arrow.up")
+                                                     Text("Share This Table")
+                                                         .fontWeight(.semibold)
+                                                 }
+                                                 .font(.system(size: 14))
+                                                 .padding(.vertical, 8)
+                                                 .padding(.horizontal, 12)
+                                                 .background(
+                                                     RoundedRectangle(cornerRadius: 10)
+                                                         .fill(Color.blue.opacity(0.1))
+                                                 )
+                                                 .foregroundColor(.blue)
+                                             }
+                                             .padding(.horizontal, 16)
+                                             .padding(.top, 6)
+                                        }
+                                    }
                                 }
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color(.systemBackground))
+                                        .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color(.systemGray5), lineWidth: 1)
+                                )
                             }
                         }
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(.systemBackground))
-                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color(.systemGray5), lineWidth: 1)
-                        )
-                    }
-                    .padding(.horizontal)
                 }
+                .padding(.horizontal)
             }
         }
         .navigationBarTitle("Share Tables", displayMode: .inline)
@@ -6148,39 +6953,22 @@ struct AllTablesExportView: View {
             if viewModel.currentArrangement.title != arrangementTitle {
                 viewModel.currentArrangement.title = arrangementTitle
             }
+            // Save a snapshot of the current arrangement to history then reset to a brand new empty arrangement
+            viewModel.saveCurrentArrangement()
             dismiss()
-            // After dismissing, show the effortless screen (creating seating for events)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                showEffortlessScreen = true
-                showingTutorial = false
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                    viewModel.resetAndShowWelcomeScreen()
+                    showEffortlessScreen = true
+                    showingTutorial = false
+                }
             }
-        })
+        }.tint(.blue))
         .accessibilityLabel("Share Tables")
         .accessibilityHint("Allows you to share your table arrangement with others")
-    }
-    
-    // Helper to share the export text with all tables info
-    private func shareText_duplicate() {
-        let exportText = viewModel.exportAllTables()
-        if MFMessageComposeViewController.canSendText() {
-            let messageVC = MFMessageComposeViewController()
-            messageVC.body = exportText
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootVC = windowScene.windows.first?.rootViewController {
-                AdsManager.shared.showInterstitialIfReady()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    rootVC.present(messageVC, animated: true)
-                }
-            }
-        } else {
-            AdsManager.shared.showInterstitialIfReady()
-            let activityVC = UIActivityViewController(activityItems: [exportText], applicationActivities: nil)
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootVC = windowScene.windows.first?.rootViewController {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    rootVC.present(activityVC, animated: true)
-                }
-            }
+        .safeAreaInset(edge: .bottom) {
+            // ensure scroll can reach bottom by reserving a small inset
+            Color.clear.frame(height: 20)
         }
     }
     
@@ -6190,6 +6978,8 @@ struct AllTablesExportView: View {
         if viewModel.currentArrangement.title != arrangementTitle {
             viewModel.currentArrangement.title = arrangementTitle
         }
+        // Save a snapshot to history as part of QR generation
+        viewModel.saveCurrentArrangement()
         
         // Close this sheet and show QR code sheet
         dismiss()
@@ -6204,7 +6994,6 @@ struct AllTablesExportView: View {
             }
         }
     }
-
     // --- Add state and helpers for editing table names ---
     @State private var editingTableId: Int? = nil
     @State private var editingTableName: String = ""
@@ -6236,7 +7025,6 @@ struct AllTablesExportView: View {
         editingTableName = ""
     }
 }
-
 // Helper for share sheet
 struct ShareSheet: UIViewControllerRepresentable {
     var activityItems: [Any]
@@ -6246,7 +7034,6 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
-
 // Helper component for the person bubble in table preview
 struct PersonBubble: View {
     let person: Person
@@ -6402,7 +7189,7 @@ struct Table3DView: View {
                     onEditProfile(person)
                 }
             
-            Text(person.name)
+            Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
                 .font(.caption)
                 .foregroundColor(.primary)
                 .frame(width: 70)
@@ -6615,7 +7402,7 @@ private struct ContactSupportButton: View {
                         endPoint: .trailing
                     )
                     .cornerRadius(16)
-                    .shadow(color: Color.blue.opacity(0.18), radius: 8, x: 0, y: 4)
+                    .shadow(color: Color.accentColor.opacity(0.18), radius: 8, x: 0, y: 4)
                 )
             }
             Spacer()
@@ -6672,7 +7459,7 @@ struct ComingSoonView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 40)
                         .padding(.vertical, 14)
-                        .background(Capsule().fill(Color.blue))
+                        .background(Capsule().fill(Color.accentColor))
                 }
                 Spacer().frame(height: 30)
             }
@@ -6680,7 +7467,6 @@ struct ComingSoonView: View {
         
     }
 }
-
 // Add ContactFormView below SettingsViewImpl:
 struct ContactFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -6950,14 +7736,13 @@ struct AboutMeView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 40)
                         .padding(.vertical, 14)
-                        .background(Capsule().fill(Color.blue))
+                        .background(Capsule().fill(Color.accentColor))
                 }
                 Spacer().frame(height: 30)
             }
         }
     }
 }
-
 class SeatPositionCalculator {
     func calculatePositions(for shape: TableShape, in size: CGSize, totalSeats: Int, iconSize: CGFloat) -> [CGPoint] {
         guard totalSeats > 0 else { return [] }
@@ -7131,7 +7916,6 @@ class SeatPositionCalculator {
         }
         return positions
     }
-    
     private func adjustForOverlaps(positions: [CGPoint], iconSize: CGFloat) -> [CGPoint] {
         var adjusted = positions
         if adjusted.count < 2 { return adjusted }
@@ -7276,7 +8060,7 @@ struct MiniPersonRowPreview: View {
             } else {
                 EmptyView()
             }
-            Text(person.name)
+            Text(person.name.split(separator: " ").first.map(String.init) ?? person.name)
                 .font(.headline)
                 .foregroundColor(.primary)
                 .frame(width: 120, alignment: .leading)
@@ -7355,25 +8139,6 @@ struct TableManagerView: View {
                     Button(isSelecting ? "Done" : "Select") { isSelecting.toggle(); if !isSelecting { selectedIds.removeAll() } }
                         .font(.system(size: 16, weight: .semibold))
                     Spacer()
-                    Menu {
-                        Picker("Sort by", selection: $sortKey) {
-                            Text("Name").tag(SortKey.name)
-                            Text("Seats").tag(SortKey.seats)
-                            Text("Shape").tag(SortKey.shape)
-                        }
-                        Picker("Order", selection: $sortAscending) {
-                            Text("Ascending").tag(true)
-                            Text("Descending").tag(false)
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.arrow.down.square")
-                            Text("Sort")
-                        }
-                        .font(.system(size: 15, weight: .semibold))
-                        .padding(8)
-                        .background(Capsule().fill(Color(.systemGray6)))
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -7456,6 +8221,7 @@ struct TableManagerView: View {
             .sheet(isPresented: $showingReorder) {
                 ReorderTablesView(viewModel: viewModel, isPresented: $showingReorder)
             }
+            .tint(.blue)
             .alert("Rename Table", isPresented: Binding(get: { showRenamePrompt != nil }, set: { if !$0 { showRenamePrompt = nil } })) {
                 TextField("Table name", text: $tempName).autocapitalization(.words)
                 Button("Cancel", role: .cancel) { showRenamePrompt = nil }
@@ -7589,12 +8355,13 @@ private struct TableCard: View {
                 Button(action: onRename) {
                     Image(systemName: "rectangle.and.pencil.and.ellipsis")
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.blue)
                         .padding(8)
                         .background(Capsule().fill(Color(.systemGray6)))
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .padding(6)
-                .offset(y: -8)
+                .offset(y: -14)
             }
             .overlay(alignment: .topTrailing) {
                 Button(action: { onDelete() }) {
@@ -7606,7 +8373,7 @@ private struct TableCard: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .padding(6)
-                .offset(y: -8)
+                .offset(y: -14)
             }
             
 
@@ -7648,7 +8415,6 @@ private struct TableCard: View {
         }
     }
 }
-
 // Inline reorder view for tables
 struct ReorderTablesView: View {
     @ObservedObject var viewModel: SeatingViewModel
@@ -7680,14 +8446,14 @@ struct ReorderTablesView: View {
             }
             .navigationTitle("Reorder Tables")
             .navigationBarItems(
-                leading: Button("Cancel") { isPresented = false },
+                leading: Button("Cancel") { isPresented = false }.tint(.blue),
                 trailing:
                     HStack(spacing: 12) {
                         Button("Done") {
                             viewModel.reorderTables(newOrder: order)
                             isPresented = false
                             editMode?.wrappedValue = .inactive
-                        }
+                        }.tint(.blue)
                     }
             )
             .onAppear {
@@ -7697,4 +8463,3 @@ struct ReorderTablesView: View {
         }
     }
 }
-

@@ -17,10 +17,10 @@ struct TableCanvasView: View {
 
         var body: some View {
             ZStack {
-                Color.white
+                Color(.systemBackground)
                 tableShape
                     .stroke(Color(.sRGB, red: 0.13, green: 0.13, blue: 0.13, opacity: 1), lineWidth: 6)
-                    .background(tableShape.fill(Color.white))
+                    .background(tableShape.fill(Color(.systemBackground)))
                 ForEach(seatPositions().indices, id: \.self) { idx in
                     let pos = seatPositions()[idx]
                     Circle()
@@ -29,6 +29,8 @@ struct TableCanvasView: View {
                         .frame(width: iconSize, height: iconSize)
                         .position(x: pos.x, y: pos.y)
                 }
+                // Render only the table name here; never substitute the event name
+                // to avoid confusing the table label with the event title in history.
                 Text(arrangement.title)
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundColor(.black)

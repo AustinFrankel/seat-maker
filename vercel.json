@@ -1,0 +1,17 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "seatmakerapp.com" }],
+      "destination": "https://www.seatmakerapp.com/",
+      "permanent": true
+    },
+    {
+      "source": "/:path+",
+      "has": [{ "type": "host", "value": "seatmakerapp.com" }],
+      "destination": "https://www.seatmakerapp.com/:path+",
+      "permanent": true
+    }
+  ]
+}
+

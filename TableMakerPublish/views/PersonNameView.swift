@@ -8,10 +8,12 @@ public struct PersonNameView: View {
     @State private var isEditing = false
     @State private var editedName: String = ""
     @State private var keyboardHeight: CGFloat = 0
+    // Custom initializer that pre-fills the editor with the current name so Done saves properly
     public init(person: Person, onUpdate: @escaping (String) -> Void, showDoneButtonOnRight: Bool = false) {
         self.person = person
         self.onUpdate = onUpdate
         self.showDoneButtonOnRight = showDoneButtonOnRight
+        self._editedName = State(initialValue: person.name)
     }
     public var body: some View {
         if isEditing {
@@ -48,12 +50,12 @@ public struct PersonNameView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
                 .frame(width: 120)
-                .onTapGesture {
-                    isEditing = true
-                    editedName = person.name
-                }
+                // Disable inline editing when used in mini window rows
+                .allowsHitTesting(false)
         }
     }
+    
+    // (Initializer is above)
     private func finishEditing() {
         if !editedName.isEmpty {
             onUpdate(editedName)

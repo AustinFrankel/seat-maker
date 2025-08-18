@@ -78,18 +78,20 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func scheduleDailyReminder() {
-        // Clear existing with the same identifier
-        center.removePendingNotificationRequests(withIdentifiers: [dailyReminderId])
-
-        var dateComponents = DateComponents()
-        // Default time: 10:00 local time
-        dateComponents.hour = 10
-        dateComponents.minute = 0
-
-        let content = buildContent()
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        let request = UNNotificationRequest(identifier: dailyReminderId, content: content, trigger: trigger)
-        center.add(request, withCompletionHandler: nil)
+        // Idempotent: if a request with the same identifier already exists at 10:00, do nothing
+        center.getPendingNotificationRequests { requests in
+            let alreadyScheduled = requests.contains { $0.identifier == self.dailyReminderId }
+            if alreadyScheduled {
+                return
+            }
+            var dateComponents = DateComponents()
+            dateComponents.hour = 10
+            dateComponents.minute = 0
+            let content = self.buildContent()
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(identifier: self.dailyReminderId, content: content, trigger: trigger)
+            self.center.add(request, withCompletionHandler: nil)
+        }
     }
 
     private func buildContent() -> UNMutableNotificationContent {

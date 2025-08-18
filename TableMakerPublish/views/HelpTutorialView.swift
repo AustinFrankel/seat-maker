@@ -11,7 +11,7 @@ struct HelpTutorialView: View {
                 Color(.systemGroupedBackground).ignoresSafeArea()
                 VStack(spacing: 0) {
                     ProgressView(value: Double(step + 1), total: Double(totalSteps))
-                        .accentColor(.blue)
+                        .tint(.accentColor)
                         .padding(.horizontal)
                         .padding(.top, 12)
 

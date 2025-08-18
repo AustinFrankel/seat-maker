@@ -30,7 +30,7 @@ struct InlineGuestManagerView: View {
                                 // Remove drag grip inside row; use system edit handles only
                                 Text("\(index + 1)")
                                     .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(.accentColor)
                                     .frame(width: 28, alignment: .trailing)
 
                                 Text(person.name)
@@ -40,12 +40,12 @@ struct InlineGuestManagerView: View {
                                 Spacer()
                                 Button(action: { viewModel.toggleLock(for: person.id) }) {
                                     Image(systemName: person.isLocked ? "lock.fill" : "lock.open")
-                                        .foregroundColor(person.isLocked ? .blue : .gray)
+                                        .foregroundColor(person.isLocked ? .accentColor : .gray)
                                         .font(.system(size: 18, weight: .semibold))
                                         .padding(7)
                                         .background(
                                             Circle()
-                                                .fill(person.isLocked ? Color.blue.opacity(0.12) : Color.gray.opacity(0.08))
+                                                .fill(person.isLocked ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.08))
                                         )
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -74,6 +74,7 @@ struct InlineGuestManagerView: View {
                         Image(systemName: "plus.circle.fill")
                     }
                     .accessibilityLabel("Add person")
+                    .accessibilityIdentifier("btn.managePeople")
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { isPresented = false }
@@ -86,6 +87,7 @@ struct InlineGuestManagerView: View {
             // Keep drag handles visible for easy reordering
             editMode = .active
         }
+        .tint(.accentColor)
     }
 }
 

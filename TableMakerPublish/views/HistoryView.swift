@@ -5,6 +5,8 @@ struct HistoryView: View {
     let dismissAction: () -> Void
     @State private var isSelecting: Bool = false
     @State private var selectedIds: Set<UUID> = []
+    @State private var renamingItem: SeatingArrangement? = nil
+    @State private var tempEventName: String = ""
 
     var body: some View {
         // This standalone file is retained for compatibility but the inlined
@@ -37,18 +39,29 @@ struct HistoryView: View {
                     }) {
                         VStack(alignment: .leading) {
                             Text(arrangement.title).font(.headline)
-                            Text("\(arrangement.people.count) people").font(.subheadline).foregroundColor(.secondary)
+                            let c = arrangement.people.count
+                            Text(c == 1 ? "1 person" : "\(c) people").font(.subheadline).foregroundColor(.secondary)
                             Text(arrangement.date, style: .date).font(.caption).foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .disabled(isSelecting)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("Rename") {
+                            renamingItem = arrangement
+                            tempEventName = arrangement.eventTitle ?? arrangement.title
+                        }
+                        .tint(.blue)
+                    }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: dismissAction) { Text("Back") }
+                    Button(action: dismissAction) {
+                        Text("Back")
+                    }
+                    .tint(.blue)
                 }
                 ToolbarItem(placement: .principal) {
                     Text("History").font(.headline)
@@ -71,6 +84,23 @@ struct HistoryView: View {
                             isSelecting.toggle()
                         }
                     }
+                }
+            }
+            .alert("Rename Event", isPresented: Binding(
+                get: { renamingItem != nil },
+                set: { if !$0 { renamingItem = nil } }
+            )) {
+                TextField("Event name", text: $tempEventName)
+                Button("Save") {
+                    if let item = renamingItem {
+                        viewModel.renameEvent(arrangementId: item.id, to: tempEventName)
+                    }
+                    renamingItem = nil
+                    tempEventName = ""
+                }
+                Button("Cancel", role: .cancel) {
+                    renamingItem = nil
+                    tempEventName = ""
                 }
             }
         }

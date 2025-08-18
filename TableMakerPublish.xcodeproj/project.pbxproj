@@ -60,6 +60,10 @@
 		F26EFD67C3E39413D81B66CF /* TableMakerPublishApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */; };
 		RC2222222222222222222222 /* RevenueCatConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = RC1111111111111111111111 /* RevenueCatConfig.swift */; };
 		RC4444444444444444444444 /* PaywallHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = RC3333333333333333333333 /* PaywallHost.swift */; };
+		OB3333333333333333333301 /* OnboardingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2222222222222222222201 /* OnboardingModels.swift */; };
+		OB3333333333333333333302 /* OnboardingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2222222222222222222202 /* OnboardingController.swift */; };
+		OB3333333333333333333303 /* CoachMarkOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2222222222222222222203 /* CoachMarkOverlayView.swift */; };
+		OBUIT33333333333333333333 /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBUIT22222222222222222222 /* OnboardingUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -137,6 +141,10 @@
 		F0A1B2C3FEF1000100000007 /* ShareLinkRouterTestShim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkRouterTestShim.swift; sourceTree = "<group>"; };
 		RC1111111111111111111111 /* RevenueCatConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueCatConfig.swift; sourceTree = "<group>"; };
 		RC3333333333333333333333 /* PaywallHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallHost.swift; sourceTree = "<group>"; };
+		OB2222222222222222222201 /* OnboardingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingModels.swift; sourceTree = "<group>"; };
+		OB2222222222222222222202 /* OnboardingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingController.swift; sourceTree = "<group>"; };
+		OB2222222222222222222203 /* CoachMarkOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachMarkOverlayView.swift; sourceTree = "<group>"; };
+		OBUIT22222222222222222222 /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +189,7 @@
 				EDA5DD3EE847F5FBE849BA1C /* PrivacyInfo.xcprivacy */,
 				A6F5DF842C17F986D8D10DA3 /* TableMakerPublishApp.swift */,
 				AA11BB2200CCDD3311223339 /* Animation */,
+				OB1111111111111111111111 /* Onboarding */,
 				D7891831C236C7BB81D8BB99 /* Models */,
 				B7D8F2990A3BDA706705BC92 /* Services */,
 				A64D95CF313AA59C590079A8 /* ViewModel */,
@@ -189,11 +198,22 @@
 			path = TableMakerPublish;
 			sourceTree = "<group>";
 		};
+		OB1111111111111111111111 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				OB2222222222222222222203 /* CoachMarkOverlayView.swift */,
+				OB2222222222222222222202 /* OnboardingController.swift */,
+				OB2222222222222222222201 /* OnboardingModels.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		452F7D3990E2AE2AF57BBCA3 /* TableMakerPublishUITests */ = {
 			isa = PBXGroup;
 			children = (
 				902999B9B16885096F3A5C98 /* TableMakerPublishUITests.swift */,
 				17EB6CD28857739010F9D04F /* TableMakerPublishUITestsLaunchTests.swift */,
+				OBUIT22222222222222222222 /* OnboardingUITests.swift */,
 			);
 			path = TableMakerPublishUITests;
 			sourceTree = "<group>";
@@ -340,6 +360,11 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				2BF3BD942E4EF30C009A4B22 /* ReceiptParser */,
+				2BF3BD962E4EF30C009A4B22 /* RevenueCat */,
+				2BF3BD982E4EF30C009A4B22 /* RevenueCatUI */,
+			);
 			name = TableMakerPublish;
 			productName = TableMakerPublish;
 			productReference = 48DA812AB07FD90FD5B24FAB /* TableMakerPublish.app */;
@@ -371,7 +396,6 @@
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					0AEB6519E805769EF3061A4F = {
-						DevelopmentTeam = 86THBB6R66;
 						ProvisioningStyle = Automatic;
 						TestTargetID = 3943B3F2FEBF7A2893C3A286;
 					};
@@ -379,7 +403,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					DE3AD4649AEE1F7B8D80A258 = {
-						DevelopmentTeam = 86THBB6R66;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -473,6 +496,7 @@
 			files = (
 				5258A7A30703E853C6517D40 /* TableMakerPublishUITests.swift in Sources */,
 				A6DF2E606C5F2DDE08D07C2B /* TableMakerPublishUITestsLaunchTests.swift in Sources */,
+				OBUIT33333333333333333333 /* OnboardingUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -480,6 +504,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				OB3333333333333333333303 /* CoachMarkOverlayView.swift in Sources */,
+				OB3333333333333333333302 /* OnboardingController.swift in Sources */,
+				OB3333333333333333333301 /* OnboardingModels.swift in Sources */,
 				1AAA11112222333344445555 /* GuestManagerView.swift in Sources */,
 				8B9C0D1E2F30415263748596 /* NotificationService.swift in Sources */,
 				892C998C4AA4E988517A6FBF /* AboutMeView.swift in Sources */,
@@ -608,6 +635,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -625,6 +653,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -713,6 +742,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -730,6 +760,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

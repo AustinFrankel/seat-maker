@@ -41,6 +41,13 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: YES
+    dependencies:
+      - package: purchases-ios
+        product: RevenueCat
+      - package: purchases-ios
+        product: RevenueCatUI
+      - package: purchases-ios
+        product: ReceiptParser
 
   TableMakerPublishTests:
     type: bundle.unit-test
@@ -75,5 +82,10 @@ schemes:
         - name: TableMakerPublishUITests
     run:
       config: Debug
+
+packages:
+  purchases-ios:
+    url: https://github.com/RevenueCat/purchases-ios.git
+    from: 5.35.0
 
 

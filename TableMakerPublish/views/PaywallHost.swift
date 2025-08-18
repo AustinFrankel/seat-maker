@@ -1,5 +1,5 @@
 import SwiftUI
-#if canImport(RevenueCat)
+  #if canImport(RevenueCat)
 import RevenueCat
 #endif
 #if canImport(RevenueCatUI)
@@ -11,25 +11,67 @@ struct PaywallHost: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        Group {
-            #if canImport(RevenueCatUI)
-            if let offering = rc.offering {
-                // Render the paywall; rely on onDisappear to close host
-                PaywallView(offering: offering)
-                    .onDisappear { isPresented = false }
-            } else {
-                VStack(spacing: 16) {
-                    ProgressView("Loading…")
-                    Button("Retry") { RevenueCatManager.shared.refreshOfferings() }
+        #if canImport(RevenueCatUI)
+        contentWithRevenueCatUI
+        #else
+        // Native lightweight fallback when RevenueCatUI isn't present
+        FallbackPaywall(isPresented: $isPresented)
+        #endif
+    }
+
+    #if canImport(RevenueCatUI)
+    @ViewBuilder
+    private var contentWithRevenueCatUI: some View {
+        if let offering = rc.offering {
+            // Render RC paywall with robust dismissal handling
+            PaywallView(offering: offering)
+                .onRequestedDismissal {
+                    RevenueCatManager.shared.refreshCustomerInfo()
+                    isPresented = false
+                }
+        } else if !rc.fallbackProducts.isEmpty {
+            // When no offerings available, show direct product list fallback even if RC UI is available
+            VStack(spacing: 12) {
+                ForEach(rc.fallbackProducts, id: \.productIdentifier) { product in
+                    Button(action: { purchaseDirect(product) }) {
+                        Text("Buy \(product.localizedTitle) – \(product.localizedPriceString)")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
+                            .foregroundColor(.white)
+                    }
+                }
+                HStack(spacing: 12) {
+                    Button("Restore") { RevenueCatManager.shared.restore { _ in } }
                     Button("Close") { isPresented = false }
                 }
             }
-            #else
-            // Native lightweight fallback when RevenueCatUI isn't present
-            FallbackPaywall(isPresented: $isPresented)
-            #endif
+            .padding()
+        } else {
+            VStack(spacing: 16) {
+                ProgressView("Loading…")
+                Button("Retry") { RevenueCatManager.shared.refreshOfferings() }
+                Button("Close") { isPresented = false }
+            }
+            .padding()
         }
     }
+    #if canImport(RevenueCat)
+    private func purchaseDirect(_ product: StoreProduct) {
+        Purchases.shared.purchase(product: product) { _, info, error, userCancelled in
+            DispatchQueue.main.async {
+                RevenueCatManager.shared.applyCustomerInfo(info)
+                if RevenueCatManager.shared.state.unlimitedFeatures {
+                    isPresented = false
+                } else if let error = error, !userCancelled {
+                    // no-op here; RC UI path doesn't show inline errors
+                    print("RC purchase error:", error.localizedDescription)
+                }
+            }
+        }
+    }
+    #endif
+    #endif
 }
 
 #if !canImport(RevenueCatUI)
@@ -51,6 +93,19 @@ struct FallbackPaywall: View {
                     ForEach(offering.availablePackages, id: \.identifier) { pkg in
                         Button(action: { purchase(pkg) }) {
                             Text(isPurchasing ? "Processing…" : "Buy \(pkg.storeProduct.localizedTitle) – \(pkg.storeProduct.localizedPriceString)")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
+                                .foregroundColor(.white)
+                        }
+                        .disabled(isPurchasing)
+                    }
+                }
+            } else if !rc.fallbackProducts.isEmpty {
+                VStack(spacing: 12) {
+                    ForEach(rc.fallbackProducts, id: \.productIdentifier) { product in
+                        Button(action: { purchaseDirect(product) }) {
+                            Text(isPurchasing ? "Processing…" : "Buy \(product.localizedTitle) – \(product.localizedPriceString)")
                                 .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue))
@@ -89,7 +144,23 @@ struct FallbackPaywall: View {
         purchaseError = nil
         Purchases.shared.purchase(package: pkg) { _, info, error, userCancelled in
             DispatchQueue.main.async {
-                RevenueCatManager.shared.state.update(from: info)
+                RevenueCatManager.shared.applyCustomerInfo(info)
+                isPurchasing = false
+                if RevenueCatManager.shared.state.unlimitedFeatures {
+                    isPresented = false
+                } else if let error = error, !userCancelled {
+                    purchaseError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func purchaseDirect(_ product: StoreProduct) {
+        isPurchasing = true
+        purchaseError = nil
+        Purchases.shared.purchase(product: product) { _, info, error, userCancelled in
+            DispatchQueue.main.async {
+                RevenueCatManager.shared.applyCustomerInfo(info)
                 isPurchasing = false
                 if RevenueCatManager.shared.state.unlimitedFeatures {
                     isPresented = false

@@ -45,7 +45,7 @@ public final class LaunchAnimationController: ObservableObject {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) { [weak self] in
                             guard let self else { return }
                             self.phase = .logo
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) { [weak self] in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.90) { [weak self] in
                                 guard let self else { return }
                                 self.phase = .done
                                 self.isCompleted = true

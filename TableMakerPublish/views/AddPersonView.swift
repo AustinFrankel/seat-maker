@@ -7,6 +7,7 @@ struct ContactsListView: View {
     let contacts: [String]
     var searchText: String = ""
     let onSelect: ([String]) -> Void
+    var onSmartSeating: (([String]) -> Void)? = nil
     @State private var localSearchText: String = ""
     @State private var selectedContacts: Set<String> = []
     @State private var isMultiSelectMode: Bool = false
@@ -70,6 +71,10 @@ struct ContactsListView: View {
                         Spacer()
                         Text("No contacts found")
                             .foregroundColor(.secondary)
+                            .onAppear {
+                                // If nothing is available, prompt user to grant access via settings
+                                NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
+                            }
                         Spacer()
                     }
                 } else {
@@ -115,6 +120,14 @@ struct ContactsListView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if isMultiSelectMode {
+                        if let onSmartSeating = onSmartSeating {
+                            Button("Smart Seating") {
+                                if !selectedContacts.isEmpty {
+                                    onSmartSeating(Array(selectedContacts))
+                                }
+                            }
+                            .disabled(selectedContacts.isEmpty)
+                        }
                         Button("Done") {
                             if !selectedContacts.isEmpty {
                                 onSelect(Array(selectedContacts))
@@ -231,6 +244,7 @@ struct AddPersonView: View {
                                 .fontWeight(.semibold)
                         }
                         .font(.title3)
+                        .foregroundColor(.blue)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 16)
                         .frame(minHeight: 56)
@@ -250,6 +264,7 @@ struct AddPersonView: View {
                                 .fontWeight(.semibold)
                         }
                         .font(.title3)
+                        .foregroundColor(.blue)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 16)
                         .frame(minHeight: 56)
@@ -273,10 +288,10 @@ struct AddPersonView: View {
             .navigationBarItems(
                 leading: Button(NSLocalizedString("Cancel", comment: "Cancel button")) {
                     isPresented = false
-                },
+                }.tint(.blue),
                 trailing: Button(NSLocalizedString("Add", comment: "Add button")) {
                     addPerson()
-                }
+                }.tint(.blue)
                 .disabled(newPersonName.isEmpty)
             )
             // Contacts picker presented as full screen to avoid nested-sheet limitation
@@ -297,6 +312,14 @@ struct AddPersonView: View {
                             showingContactsPicker = false
                             isPresented = false
                             // Ensure main screen shows the table after importing contacts
+                            NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
+                        }
+                    },
+                    onSmartSeating: { names in
+                        Task { @MainActor in
+                            viewModel.smartCreateTables(from: names)
+                            showingContactsPicker = false
+                            isPresented = false
                             NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
                         }
                     }
@@ -528,12 +551,11 @@ struct ImportFromListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Back") {
-                        if step == 1 && hasProcessedSource {
-                            step = 2
-                        } else if step == 1 {
-                            isPresented = false
+                        // Always take user back to Seating settings (Step 1) instead of Choose a Source/blank preview
+                        if step > 1 {
+                            step = 1
                         } else {
-                            step -= 1
+                            isPresented = false
                         }
                     }
                 }
@@ -549,8 +571,8 @@ struct ImportFromListView: View {
         .onChange(of: settings.groupConstraint) { _ in if step == 4 { recomputePreview() } }
         .onChange(of: settings.selectedShapes) { _ in if step == 4 { recomputePreview() } }
         .onAppear {
-            // Start at Choose Source; after processing, go to Seating Settings
-            step = 2
+            // Start at Choose Source for a clearer flow
+            withAnimation(.easeInOut(duration: 0.25)) { step = 2 }
             peoplePerTableText = String(settings.peoplePerTable)
         }
     }
@@ -570,12 +592,12 @@ struct ImportFromListView: View {
                             let buttonSize: CGFloat = 36
                             RepeatButton(
                                 onTap: {
-                                    let newVal = max(2, settings.peoplePerTable - 1)
+                                    let newVal = max(1, settings.peoplePerTable - 1)
                                     settings.peoplePerTable = newVal
                                     peoplePerTableText = String(newVal)
                                 },
                                 onRepeat: {
-                                    let newVal = max(2, settings.peoplePerTable - 1)
+                                    let newVal = max(1, settings.peoplePerTable - 1)
                                     settings.peoplePerTable = newVal
                                     peoplePerTableText = String(newVal)
                                 }
@@ -597,12 +619,14 @@ struct ImportFromListView: View {
 
                             RepeatButton(
                                 onTap: {
-                                    let newVal = min(20, settings.peoplePerTable + 1)
+                                    let maxAllowed = max(1, min(20, mappedPeople.isEmpty ? 20 : mappedPeople.count))
+                                    let newVal = min(maxAllowed, settings.peoplePerTable + 1)
                                     settings.peoplePerTable = newVal
                                     peoplePerTableText = String(newVal)
                                 },
                                 onRepeat: {
-                                    let newVal = min(20, settings.peoplePerTable + 1)
+                                    let maxAllowed = max(1, min(20, mappedPeople.isEmpty ? 20 : mappedPeople.count))
+                                    let newVal = min(maxAllowed, settings.peoplePerTable + 1)
                                     settings.peoplePerTable = newVal
                                     peoplePerTableText = String(newVal)
                                 }
@@ -644,7 +668,7 @@ struct ImportFromListView: View {
                     settingsCard(title: "Table count", subtitle: "") {
                         VStack(alignment: .leading, spacing: 12) {
                             Toggle("Set manually", isOn: $settings.manualTableCountEnabled)
-                                .tint(.blue)
+                                .tint(.accentColor)
                             if settings.manualTableCountEnabled {
                                 HStack(spacing: 8) {
                                     let buttonSize: CGFloat = 36
@@ -716,8 +740,8 @@ struct ImportFromListView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 8)
                 }
-                .disabled(!(settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty))
-                .opacity((settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty) ? 1 : 0.5)
+                .disabled(!(settings.peoplePerTable >= 1 && !settings.selectedShapes.isEmpty))
+                .opacity((settings.peoplePerTable >= 1 && !settings.selectedShapes.isEmpty) ? 1 : 0.5)
                 .background(.ultraThinMaterial)
             }
         }
@@ -789,10 +813,10 @@ struct ImportFromListView: View {
                         Button(action: { showFileImporter = true }) {
                             Text("Choose CSV")
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.blue)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .background(RoundedRectangle(cornerRadius: 14).fill(Color.green))
+                                .frame(height: 48)
+                                .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue.opacity(0.1)))
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -831,10 +855,10 @@ struct ImportFromListView: View {
                             Button(action: { fetchGoogleSheet() }) {
                                 Text("Connect Google Sheets")
                                     .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.orange)
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 52)
-                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange))
+                                    .frame(height: 48)
+                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange.opacity(0.12)))
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -983,7 +1007,10 @@ struct ImportFromListView: View {
                 Divider()
                 HStack(spacing: 12) {
                     // Swap order: show Shuffle first, then Create Tables
-                    Button(action: { recomputePreview() }) {
+                    Button(action: {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        recomputePreview()
+                    }) {
                         Text("Shuffle")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
@@ -1077,7 +1104,7 @@ struct ImportFromListView: View {
         recomputeMappedPeople()
         // Auto-suggest people-per-table based on guest count
         let total = mappedPeople.count
-        let suggested = suggestedPeoplePerTable(for: total)
+        let suggested = min(total, suggestedPeoplePerTable(for: total))
         settings.peoplePerTable = suggested
         peoplePerTableText = String(suggested)
 
@@ -1115,8 +1142,16 @@ struct ImportFromListView: View {
 
     private func canContinue() -> Bool {
         switch step {
-        case 1: return settings.peoplePerTable >= 2 && !settings.selectedShapes.isEmpty
-        case 2: return !rawRows.isEmpty || !pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case 1:
+            // Clamp people-per-table to not exceed available names if already parsed
+            let maxAllowed = max(1, min(20, mappedPeople.isEmpty ? 20 : mappedPeople.count))
+            if settings.peoplePerTable > maxAllowed { settings.peoplePerTable = maxAllowed }
+            return settings.peoplePerTable >= 1 && !settings.selectedShapes.isEmpty
+        case 2:
+            // Require at least 2 names when using text list
+            let names = pastedText.split(whereSeparator: { $0.isNewline }).map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            let hasAtLeastTwo = names.count >= 2 || !rawRows.isEmpty
+            return hasAtLeastTwo
         case 3: return mappedPeople.contains(where: { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
         default: return false
         }
@@ -1345,7 +1380,7 @@ struct ImportFromListView: View {
 
     private func buildAssignments(people: [ImportedPersonData], settings: ImportSeatingSettings) -> [[ImportedPersonData]] {
         // Clamp per-table to 20 max
-        let perTableInput = max(2, min(20, settings.peoplePerTable))
+        let perTableInput = max(1, min(20, settings.peoplePerTable))
         let total = people.count
         // Manual count path: ensure enough tables to keep <=20 per table
         if settings.manualTableCountEnabled {
@@ -1354,7 +1389,7 @@ struct ImportFromListView: View {
             return distribute(people: people, into: manualCount, perTableLimit: 20, targetPerTable: perTableInput, settings: settings)
         }
         // Auto: honor the chosen people-per-table value
-        let targetPerTable = perTableInput
+        let targetPerTable = min(perTableInput, max(1, total))
         let autoTables = max(1, Int(ceil(Double(total) / Double(targetPerTable))))
         let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
         let tableCount = max(minTablesForCapacity, autoTables)
@@ -1363,22 +1398,30 @@ struct ImportFromListView: View {
 
     // Helper to distribute people based on constraints
     private func distribute(people: [ImportedPersonData], into tableCount: Int, perTableLimit: Int, targetPerTable: Int, settings: ImportSeatingSettings) -> [[ImportedPersonData]] {
-        let perTable = min(perTableLimit, max(2, targetPerTable))
+        let perTable = min(perTableLimit, max(1, targetPerTable))
         if tableCount == 0 { return [] }
         var tables: [[ImportedPersonData]] = Array(repeating: [], count: tableCount)
-        let vips = people.filter { $0.vip }
-        let nonVIPs = people.filter { !$0.vip }
+        // Randomize VIP and non‑VIP order so Shuffle actually changes results
+        let vips = people.filter { $0.vip }.shuffled()
+        let nonVIPs = people.filter { !$0.vip }.shuffled()
         var vipIndex = 0
         for idx in 0..<tableCount { if vipIndex < vips.count { tables[idx].append(vips[vipIndex]); vipIndex += 1 } }
         while vipIndex < vips.count {
             if let idx = tables.firstIndex(where: { $0.count < perTable }) { tables[idx].append(vips[vipIndex]); vipIndex += 1 } else { break }
         }
         if settings.groupConstraint == .keepTogether {
-            let groups = Dictionary(grouping: nonVIPs, by: { $0.group ?? "" }).sorted { $0.key < $1.key }
-            for (_, members) in groups { var idx = tables.firstIndex { $0.count + members.count <= perTable } ?? tables.firstIndex { $0.count < perTable } ?? 0; for m in members { if tables[idx].count >= perTable { idx = (idx + 1) % tableCount }; tables[idx].append(m) } }
+            let groups = Dictionary(grouping: nonVIPs, by: { $0.group ?? "" })
+            // Shuffle group order for variety
+            for members in groups.values.shuffled() {
+                var idx = tables.firstIndex { $0.count + members.count <= perTable } ?? tables.firstIndex { $0.count < perTable } ?? 0
+                for m in members {
+                    if tables[idx].count >= perTable { idx = (idx + 1) % tableCount }
+                    tables[idx].append(m)
+                }
+            }
         } else if settings.groupConstraint == .spreadAcross {
             let groups = Dictionary(grouping: nonVIPs, by: { $0.group ?? UUID().uuidString })
-            var groupArrays = groups.values.map { Array($0) }
+            var groupArrays = groups.values.map { Array($0) }.shuffled()
             var didPlace = true
             var t = 0
             while didPlace {

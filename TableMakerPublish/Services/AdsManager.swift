@@ -15,6 +15,10 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
     private(set) var isConfigured: Bool = false
     private var interstitial: InterstitialAd?
     private var interstitialSuppressedUntil: Date?
+    private var lastInterstitialPresentationDate: Date?
+    private let minimumInterstitialInterval: TimeInterval = 150 // 2 minutes 30 seconds
+    private var pendingCompletion: (() -> Void)?
+    private var isPresentingInterstitial: Bool = false
 
     func configure() {
         guard !isConfigured else { return }
@@ -73,27 +77,63 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
     }
 
     func showInterstitialIfReady() {
+        // Backwards-compatible behavior (no completion). Prefer showInterstitialThen(_:).
+        showInterstitialThen({})
+    }
+
+    /// Presents an interstitial if available, then calls completion after it is dismissed.
+    /// If ads are disabled, suppressed, not ready, or cannot be presented, calls completion immediately.
+    func showInterstitialThen(_ completion: @escaping () -> Void) {
         // Do not show if user purchased remove_ads or pro
         let shouldShowAds = !RevenueCatManager.shared.state.adsDisabled
-        if !shouldShowAds {
-            interstitial = nil
+        // Respect temporary suppression
+        let isSuppressed = (interstitialSuppressedUntil ?? .distantPast) > Date()
+
+        // Frequency capping: limit to one interstitial every minimumInterstitialInterval
+        let isFrequencyCapped: Bool = {
+            guard let last = lastInterstitialPresentationDate else { return false }
+            return Date().timeIntervalSince(last) < minimumInterstitialInterval
+        }()
+
+        // If ads shouldn't show or we are frequency capped, run completion now
+        if !shouldShowAds || isSuppressed || isFrequencyCapped {
+            DispatchQueue.main.async { completion() }
             return
         }
-        // Do not show if temporarily suppressed (e.g., after Delete All Data or sensitive flows)
-        if let until = interstitialSuppressedUntil, until > Date() {
+
+        // If an interstitial is currently presenting, enqueue latest completion to run on dismissal
+        if isPresentingInterstitial {
+            pendingCompletion = completion
             return
         }
+
         guard let presenter = Self.topMostViewController(), let interstitial = interstitial else {
+            // No ad ready → preload and continue immediately
             preloadInterstitial()
+            DispatchQueue.main.async { completion() }
             return
         }
+
         // Avoid presenting over any active modal/sheet or while not in the window hierarchy
         if presenter.presentedViewController != nil || presenter.view.window == nil {
+            // Cannot present now; run completion and try to preload for next time
+            preloadInterstitial()
+            DispatchQueue.main.async { completion() }
             return
         }
+
+        // Present the ad and store completion for when it dismisses
+        pendingCompletion = completion
         interstitial.present(from: presenter)
         self.interstitial = nil
+        isPresentingInterstitial = true
         preloadInterstitial()
+    }
+
+    /// Cancels any pending completion scheduled to run after the current interstitial is dismissed.
+    /// Use when the user changes flows (e.g., switches from Image share to QR) while an ad is up.
+    func cancelPendingCompletion() {
+        pendingCompletion = nil
     }
 
     /// Temporarily suppress interstitial presentation for the provided duration (seconds)
@@ -119,12 +159,28 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
     // MARK: - GADFullScreenContentDelegate
     func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("[Ads] Interstitial dismissed")
+        isPresentingInterstitial = false
+        let completion = pendingCompletion
+        pendingCompletion = nil
+        // Give UIKit a beat to finish dismissal animations before presenting next UI
+        if let completion = completion {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                completion()
+            }
+        }
     }
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
         print("[Ads] Failed to present interstitial: \(error)")
+        isPresentingInterstitial = false
+        let completion = pendingCompletion
+        pendingCompletion = nil
+        if let completion = completion { DispatchQueue.main.async { completion() } }
     }
     func adWillPresentFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("[Ads] Presenting interstitial")
+        // Record presentation time for frequency capping
+        lastInterstitialPresentationDate = Date()
+        isPresentingInterstitial = true
     }
 }
 

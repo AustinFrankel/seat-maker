@@ -32,7 +32,18 @@ final class RevenueCatManager: NSObject, ObservableObject {
     static let shared = RevenueCatManager()
 
     @Published var offering: Offering?
+    #if canImport(RevenueCat)
+    // When Offerings aren't configured or cannot be fetched, we use direct product fetch as a fallback
+    @Published var fallbackProducts: [StoreProduct] = []
+    #endif
     let state = PurchaseState()
+
+    #if canImport(RevenueCat)
+    /// Public entry point for views to apply updated CustomerInfo without exposing internal state mutation
+    func applyCustomerInfo(_ info: CustomerInfo?) {
+        state.update(from: info)
+    }
+    #endif
 
     func configure() {
         #if canImport(RevenueCat)
@@ -81,17 +92,36 @@ final class RevenueCatManager: NSObject, ObservableObject {
         Purchases.shared.getOfferings { [weak self] offerings, error in
             if let error = error {
                 print("RC getOfferings error:", error.localizedDescription)
-                return
             }
-            guard let current = offerings?.current else {
-                print("RC offerings current is nil")
-                return
+            if let current = offerings?.current {
+                print("RC offering: \(current.identifier) packages=\(current.availablePackages.count)")
+                self?.offering = current
+                self?.fallbackProducts = []
+            } else {
+                print("RC offerings current is nil — falling back to direct product fetch")
+                self?.offering = nil
+                self?.fetchFallbackProducts()
             }
-            print("RC offering: \(current.identifier) packages=\(current.availablePackages.count)")
-            self?.offering = current
         }
         #endif
     }
+
+    #if canImport(RevenueCat)
+    private func fetchFallbackProducts() {
+        // Keep these in sync with your StoreKit configuration and App Store Connect
+        let productIds = [EntitlementID.pro, EntitlementID.removeAds]
+        Purchases.shared.getProducts(productIds) { [weak self] products in
+            DispatchQueue.main.async {
+                self?.fallbackProducts = products
+                if products.isEmpty {
+                    print("RevenueCat fallback products fetch returned 0 items. Check StoreKit configuration in the scheme.")
+                } else {
+                    print("RevenueCat fallback products loaded: \(products.map { $0.productIdentifier })")
+                }
+            }
+        }
+    }
+    #endif
 
     // Restore flow
     func restore(completion: @escaping (Result<Void, Error>) -> Void) {
