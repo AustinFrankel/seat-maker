@@ -49,9 +49,12 @@ struct ContactsListView: View {
                                     Button(action: {
                                         selectedContacts.remove(contact)
                                     }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 14))
+                                        Image(systemName: "xmark")
+                                            .foregroundColor(.secondary)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .padding(4)
+                                            .background(Color.clear)
+                                            .contentShape(Rectangle())
                                     }
                                 }
                                 .padding(.horizontal, 12)
@@ -1379,21 +1382,22 @@ struct ImportFromListView: View {
     }
 
     private func buildAssignments(people: [ImportedPersonData], settings: ImportSeatingSettings) -> [[ImportedPersonData]] {
-        // Clamp per-table to 20 max
-        let perTableInput = max(1, min(20, settings.peoplePerTable))
+        // Clamp per-table based on entitlement: non‑Pro limited to 10
+        let entitlementCap = canUseUnlimitedFeatures() ? 20 : 10
+        let perTableInput = max(1, min(entitlementCap, settings.peoplePerTable))
         let total = people.count
         // Manual count path: ensure enough tables to keep <=20 per table
         if settings.manualTableCountEnabled {
-            let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
+            let minTablesForCapacity = max(1, Int(ceil(Double(total) / Double(entitlementCap))))
             let manualCount = max(minTablesForCapacity, max(1, settings.manualTableCount))
-            return distribute(people: people, into: manualCount, perTableLimit: 20, targetPerTable: perTableInput, settings: settings)
+            return distribute(people: people, into: manualCount, perTableLimit: entitlementCap, targetPerTable: perTableInput, settings: settings)
         }
         // Auto: honor the chosen people-per-table value
         let targetPerTable = min(perTableInput, max(1, total))
         let autoTables = max(1, Int(ceil(Double(total) / Double(targetPerTable))))
-        let minTablesForCapacity = max(1, Int(ceil(Double(total) / 20.0)))
+        let minTablesForCapacity = max(1, Int(ceil(Double(total) / Double(entitlementCap))))
         let tableCount = max(minTablesForCapacity, autoTables)
-        return distribute(people: people, into: tableCount, perTableLimit: 20, targetPerTable: targetPerTable, settings: settings)
+        return distribute(people: people, into: tableCount, perTableLimit: entitlementCap, targetPerTable: targetPerTable, settings: settings)
     }
 
     // Helper to distribute people based on constraints

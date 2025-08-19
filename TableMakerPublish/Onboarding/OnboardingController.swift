@@ -132,10 +132,10 @@ final class OnboardingController: ObservableObject {
         DispatchQueue.main.async {
             guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first?.windows.first(where: { $0.isKeyWindow }) else { return }
             let emitter = CAEmitterLayer()
-            // Emit from the upper-middle of the screen so confetti travels across center
-            emitter.emitterPosition = CGPoint(x: window.bounds.midX, y: window.bounds.height * 0.25)
+            // Emit from the very top so confetti gently falls down across the screen
+            emitter.emitterPosition = CGPoint(x: window.bounds.midX, y: 0)
             emitter.emitterShape = .line
-            emitter.emitterSize = CGSize(width: window.bounds.width * 0.8, height: 2)
+            emitter.emitterSize = CGSize(width: window.bounds.width, height: 2)
             emitter.beginTime = CACurrentMediaTime()
 
             enum ConfettiShape { case rectangle, triangle, circle }
@@ -168,22 +168,22 @@ final class OnboardingController: ObservableObject {
             for color in colors {
                 for shape in shapes {
                     let cell = CAEmitterCell()
-                    cell.birthRate = 9
-                    cell.lifetime = 4.0
-                    cell.lifetimeRange = 1.0
-                    cell.velocity = 200
-                    cell.velocityRange = 80
-                    // Emit slightly outward and down to cover center area
-                    cell.emissionLongitude = .pi / 2
-                    cell.emissionRange = .pi / 4
-                    cell.yAcceleration = 220
-                    cell.xAcceleration = 30
-                    cell.spin = 3.5
-                    cell.spinRange = 3.0
-                    cell.scale = 0.7
-                    cell.scaleRange = 0.35
-                    cell.alphaRange = 0.1
-                    cell.alphaSpeed = -0.15
+                    // Gentle top-to-bottom fall, less clustered
+                    cell.birthRate = 6
+                    cell.lifetime = 6.0
+                    cell.lifetimeRange = 1.5
+                    cell.velocity = 90
+                    cell.velocityRange = 35
+                    cell.emissionLongitude = .pi / 2 // straight down
+                    cell.emissionRange = .pi / 12
+                    cell.yAcceleration = 160
+                    cell.xAcceleration = 10
+                    cell.spin = 2.0
+                    cell.spinRange = 1.0
+                    cell.scale = 0.6
+                    cell.scaleRange = 0.25
+                    cell.alphaRange = 0.05
+                    cell.alphaSpeed = -0.1
                     cell.contents = confettiImage(shape: shape, color: color)
                     cells.append(cell)
                 }
@@ -191,10 +191,10 @@ final class OnboardingController: ObservableObject {
             emitter.emitterCells = cells
             window.layer.addSublayer(emitter)
 
-            // Stop birth after a short burst and clean up
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            // Let it run a bit longer for a natural fall, then stop and clean up
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                 emitter.birthRate = 0
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     emitter.removeFromSuperlayer()
                 }
             }

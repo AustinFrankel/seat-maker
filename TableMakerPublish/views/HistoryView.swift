@@ -39,8 +39,11 @@ struct HistoryView: View {
                     }) {
                         VStack(alignment: .leading) {
                             Text(arrangement.title).font(.headline)
-                            let c = arrangement.people.count
-                            Text(c == 1 ? "1 person" : "\(c) people").font(.subheadline).foregroundColor(.secondary)
+                            // Prefer total across the entire arrangement if available
+                            let totalPeople = arrangement.totalPeopleAtSave ?? arrangement.people.count
+                            Text(totalPeople == 1 ? "1 person" : "\(totalPeople) people")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                             Text(arrangement.date, style: .date).font(.caption).foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

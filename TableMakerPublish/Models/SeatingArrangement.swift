@@ -11,8 +11,11 @@ public struct SeatingArrangement: Identifiable, Codable, Hashable {
     public var people: [Person]
     public var tableShape: TableShape
     public var seatAssignments: [UUID: Int]
+    // Total people across the entire arrangement (all tables) at the time of save.
+    // Optional for backward compatibility with previously saved data.
+    public var totalPeopleAtSave: Int? = nil
     
-    public init(id: UUID = UUID(), title: String = "Table 1", eventTitle: String? = nil, date: Date = Date(), people: [Person] = [], tableShape: TableShape = .round, seatAssignments: [UUID: Int] = [:]) {
+    public init(id: UUID = UUID(), title: String = "Table 1", eventTitle: String? = nil, date: Date = Date(), people: [Person] = [], tableShape: TableShape = .round, seatAssignments: [UUID: Int] = [:], totalPeopleAtSave: Int? = nil) {
         self.id = id
         self.title = title
         self.eventTitle = eventTitle
@@ -20,6 +23,7 @@ public struct SeatingArrangement: Identifiable, Codable, Hashable {
         self.people = people
         self.tableShape = tableShape
         self.seatAssignments = seatAssignments
+        self.totalPeopleAtSave = totalPeopleAtSave
     }
     
     public var exportDescription: String {

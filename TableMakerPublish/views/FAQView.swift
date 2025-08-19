@@ -92,7 +92,12 @@ struct FAQScreenView: View {
             PaywallHost(isPresented: $showPaywall)
         }
         .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
+            if shouldSuppressPaywall() { return }
+            AdsManager.shared.cancelPendingCompletion()
             showPaywall = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didUnlockPro)) { _ in
+            showPaywall = false
         }
     }
     

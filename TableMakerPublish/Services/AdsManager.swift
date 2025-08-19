@@ -5,6 +5,7 @@
 
 import Foundation
 import UIKit
+#if canImport(GoogleMobileAds)
 import GoogleMobileAds
 import AppTrackingTransparency
 
@@ -24,11 +25,7 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
         guard !isConfigured else { return }
         isConfigured = true
 
-        if #available(iOS 14, *) {
-            ATTrackingManager.requestTrackingAuthorization { _ in
-                // No-op. Ads serve regardless of authorization; this only affects IDFA usage.
-            }
-        }
+        // Do not prompt for tracking at launch. Apple prefers prompting at a user-relevant time.
 
         print("[Ads] Starting Google Mobile Ads SDK")
         
@@ -124,7 +121,16 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
 
         // Present the ad and store completion for when it dismisses
         pendingCompletion = completion
-        interstitial.present(from: presenter)
+        if #available(iOS 14, *) {
+            // Request tracking authorization right before the first ad presentation
+            ATTrackingManager.requestTrackingAuthorization { _ in
+                DispatchQueue.main.async {
+                    interstitial.present(from: presenter)
+                }
+            }
+        } else {
+            interstitial.present(from: presenter)
+        }
         self.interstitial = nil
         isPresentingInterstitial = true
         preloadInterstitial()
@@ -183,5 +189,17 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
         isPresentingInterstitial = true
     }
 }
-
+#else
+// Fallback no-ads stub to allow building and testing without AdMob SDK present
+final class AdsManager: NSObject {
+    static let shared = AdsManager()
+    private override init() {}
+    func configure() {}
+    func preloadInterstitial() {}
+    func showInterstitialIfReady() {}
+    func showInterstitialThen(_ completion: @escaping () -> Void) { completion() }
+    func cancelPendingCompletion() {}
+    func suppressInterstitials(for seconds: TimeInterval) {}
+}
+#endif
 

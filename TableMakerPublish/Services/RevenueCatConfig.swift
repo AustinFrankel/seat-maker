@@ -15,16 +15,38 @@ enum EntitlementID {
 }
 
 final class PurchaseState: ObservableObject {
-    @Published var hasPro: Bool = false
-    @Published var hasRemoveAds: Bool = false
+    @Published var hasPro: Bool = UserDefaults.standard.bool(forKey: "entitlement_hasPro")
+    @Published var hasRemoveAds: Bool = UserDefaults.standard.bool(forKey: "entitlement_hasRemoveAds")
 
     var adsDisabled: Bool { hasPro || hasRemoveAds }
     var unlimitedFeatures: Bool { hasPro }
 
     fileprivate func update(from info: CustomerInfo?) {
-        guard let e = info?.entitlements else { return }
-        hasPro = e[EntitlementID.pro]?.isActive == true
-        hasRemoveAds = e[EntitlementID.removeAds]?.isActive == true
+        guard let info = info else { return }
+        let e = info.entitlements
+        let wasPro = hasPro
+        var newHasPro = e[EntitlementID.pro]?.isActive == true
+        var newHasRemoveAds = e[EntitlementID.removeAds]?.isActive == true
+        // Fallback: infer from active subscriptions or purchased product identifiers if entitlements keys don't match
+        if (!newHasPro || !newHasRemoveAds) {
+            let activeProductIds: [String] = Array(info.activeSubscriptions) + info.nonSubscriptionTransactions.map { $0.productIdentifier }
+            let lower = activeProductIds.map { $0.lowercased() }
+            if !newHasPro {
+                newHasPro = lower.contains { id in id.contains("pro") || id.contains("unlimited") || id.contains("lifetime_pro") || id == "com.seatmaker.pro.lifetime" }
+            }
+            if !newHasRemoveAds {
+                newHasRemoveAds = lower.contains { id in id.contains("removeads") || id.contains("remove_ads") || id == "com.seatmaker.removeads_lifetime" }
+            }
+        }
+        hasPro = newHasPro
+        hasRemoveAds = newHasRemoveAds
+        // Persist so paywall suppression works across cold starts / offline
+        UserDefaults.standard.set(newHasPro, forKey: "entitlement_hasPro")
+        UserDefaults.standard.set(newHasRemoveAds, forKey: "entitlement_hasRemoveAds")
+        // Post unlock notification when Pro becomes active
+        if !wasPro && hasPro {
+            NotificationCenter.default.post(name: .didUnlockPro, object: nil)
+        }
     }
 }
 
@@ -108,8 +130,16 @@ final class RevenueCatManager: NSObject, ObservableObject {
 
     #if canImport(RevenueCat)
     private func fetchFallbackProducts() {
-        // Keep these in sync with your StoreKit configuration and App Store Connect
-        let productIds = [EntitlementID.pro, EntitlementID.removeAds]
+        // Try both App Store Connect identifiers and local StoreKit test IDs
+        // so fallback works in both production and local testing.
+        let productIds = [
+            // App Store Connect product identifiers
+            "com.seatmaker.pro.lifetime",
+            "com.seatmaker.removeads_lifetime",
+            // Local StoreKit configuration identifiers (for Xcode testing)
+            EntitlementID.pro,
+            EntitlementID.removeAds
+        ]
         Purchases.shared.getProducts(productIds) { [weak self] products in
             DispatchQueue.main.async {
                 self?.fallbackProducts = products
@@ -204,6 +234,13 @@ func debugPrintRevenueCat() {
 // MARK: - Paywall trigger notification
 extension Notification.Name {
     static let showPaywall = Notification.Name("ShowPaywall")
+    static let didUnlockPro = Notification.Name("DidUnlockPro")
+}
+
+// MARK: - Paywall presentation suppression helper
+/// Returns true when the paywall should not be shown (e.g., user already has Pro)
+func shouldSuppressPaywall() -> Bool {
+    return canUseUnlimitedFeatures()
 }
 
 

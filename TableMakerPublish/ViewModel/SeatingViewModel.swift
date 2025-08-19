@@ -142,7 +142,7 @@ class SeatingViewModel: ObservableObject {
             nextId += 1
         }
 
-        // Append imported tables after the existing ones
+        // Append imported tables after the existing ones. Non‑Pro limited to 4 total tables.
         for (index, peopleNames) in assignments.enumerated() {
             guard !peopleNames.isEmpty else { continue }
             let shape = shapes.isEmpty ? defaultTableShape : shapes[index % max(shapes.count, 1)]
@@ -162,8 +162,14 @@ class SeatingViewModel: ObservableObject {
                 arrangement.seatAssignments[person.id] = seatIndex
                 seatIndex += 1
             }
-            rebuilt[nextId] = arrangement
-            nextId += 1
+            // Enforce table count cap for non‑Pro
+            if !canUseUnlimitedFeatures() && rebuilt.count >= 4 {
+                NotificationCenter.default.post(name: .showPaywall, object: nil)
+                break
+            } else {
+                rebuilt[nextId] = arrangement
+                nextId += 1
+            }
         }
 
         tableCollection.tables = rebuilt
@@ -364,13 +370,17 @@ class SeatingViewModel: ObservableObject {
             return
         }
         
-        // Check if we've reached the maximum number of people (20)
-        if currentArrangement.people.count >= 20 {
+        // Enforce non‑Pro cap at 10 per table; Pro users can go to 20
+        let hardCap = canUseUnlimitedFeatures() ? 20 : 10
+        if currentArrangement.people.count >= hardCap {
             NotificationCenter.default.post(
                 name: Notification.Name("ShowMaxPeopleAlert"),
                 object: nil,
-                userInfo: ["message": "Maximum of 20 people per table reached"]
+                userInfo: ["message": hardCap == 10 ? "Upgrade to add more than 10 people per table" : "Maximum of 20 people per table reached"]
             )
+            if !canUseUnlimitedFeatures() {
+                NotificationCenter.default.post(name: .showPaywall, object: nil)
+            }
             return
         }
         
@@ -555,6 +565,8 @@ class SeatingViewModel: ObservableObject {
         }()
         
         // Create a new arrangement with a unique ID for the history
+        // Compute total across entire arrangement (sum across all tables in collection)
+        let totalAcrossAllTables: Int = tableCollection.tables.values.reduce(0) { $0 + $1.people.count }
         let newArrangement = SeatingArrangement(
             id: UUID(),
             title: historyTitle, // Persist the table name as the label
@@ -562,7 +574,8 @@ class SeatingViewModel: ObservableObject {
             date: Date(),
             people: currentArrangement.people,
             tableShape: currentArrangement.tableShape,
-            seatAssignments: currentArrangement.seatAssignments
+            seatAssignments: currentArrangement.seatAssignments,
+            totalPeopleAtSave: max(totalAcrossAllTables, currentArrangement.people.count)
         )
 
         // Avoid duplicate entries when nothing material changed since the last save
@@ -573,9 +586,15 @@ class SeatingViewModel: ObservableObject {
             let orderedA = mostRecent.people.sorted { (mostRecent.seatAssignments[$0.id] ?? 0) < (mostRecent.seatAssignments[$1.id] ?? 0) }
             let orderedB = newArrangement.people.sorted { (newArrangement.seatAssignments[$0.id] ?? 0) < (newArrangement.seatAssignments[$1.id] ?? 0) }
             let samePeople = orderedA.map { $0.id } == orderedB.map { $0.id }
-            let sameSeats = orderedA.enumerated().allSatisfy { idx, person in
-                (mostRecent.seatAssignments[person.id] ?? idx) == (newArrangement.seatAssignments[orderedB[idx].id] ?? idx)
-            }
+            // Only compare seat positions when people match to avoid indexing beyond bounds
+            let sameSeats: Bool = {
+                guard samePeople else { return false }
+                return zip(orderedA, orderedB).allSatisfy { personA, personB in
+                    let seatA = mostRecent.seatAssignments[personA.id] ?? 0
+                    let seatB = newArrangement.seatAssignments[personB.id] ?? 0
+                    return seatA == seatB
+                }
+            }()
             if sameTitle && sameEvent && sameShape && samePeople && sameSeats {
                 return
             }
@@ -914,6 +933,13 @@ class SeatingViewModel: ObservableObject {
             return
         }
         
+        // Enforce Pro requirement: block navigating to Table 5 (id 4) or beyond unless user has Pro
+        if direction == .right, nextTableId >= 4, !canUseUnlimitedFeatures() {
+            // Surface paywall and do not create new tables past the free cap
+            NotificationCenter.default.post(name: .showPaywall, object: nil)
+            return
+        }
+
         // Load or create the next table
         if let existingTable = tableCollection.tables[nextTableId] {
             // Load existing table
@@ -1352,6 +1378,11 @@ class SeatingViewModel: ObservableObject {
     /// Create a new blank table at the next available id and switch to it. Returns the new table id.
     @discardableResult
     func createAndSwitchToNewTable() -> Int {
+        // Global guard: Non‑Pro limited to 4 tables
+        if !canUseUnlimitedFeatures() && tableCollection.tables.count >= 4 {
+            NotificationCenter.default.post(name: .showPaywall, object: nil)
+            return tableCollection.currentTableId
+        }
         saveCurrentTableState()
         let nextId: Int
         if tableCollection.tables.isEmpty {
@@ -1381,6 +1412,11 @@ class SeatingViewModel: ObservableObject {
     /// Duplicate an existing table id, create a new id, and return the new id.
     @discardableResult
     func duplicateTable(id: Int) -> Int? {
+        // Global guard: Non‑Pro limited to 4 tables
+        if !canUseUnlimitedFeatures() && tableCollection.tables.count >= 4 {
+            NotificationCenter.default.post(name: .showPaywall, object: nil)
+            return nil
+        }
         guard let existing = tableCollection.tables[id] else { return nil }
         saveCurrentTableState()
         let nextId = (tableCollection.tables.keys.max() ?? -1) + 1

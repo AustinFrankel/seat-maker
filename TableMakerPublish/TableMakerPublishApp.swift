@@ -8,8 +8,10 @@
 import SwiftUI
 import UIKit
 import UserNotifications
+#if canImport(GoogleMobileAds)
 import GoogleMobileAds
 import AppTrackingTransparency
+#endif
 #if canImport(RevenueCat)
 import RevenueCat
 #endif
@@ -118,6 +120,14 @@ struct TableMakerPublishApp: App {
                 .background(resolveThemeBackground(for: appTheme, customHex: customAccentHex, isDark: isDarkMode).ignoresSafeArea())
                 // Respect the explicit dark mode toggle globally
                 .preferredColorScheme(isDarkMode ? .dark : .light)
+                // Gate non-classic themes behind Pro
+                .onChange(of: appTheme) { newTheme in
+                    if newTheme != "classic" && !canUseUnlimitedFeatures() {
+                        // Revert and present paywall
+                        appTheme = "classic"
+                        NotificationCenter.default.post(name: .showPaywall, object: nil)
+                    }
+                }
                 .onAppear {
                     // Reset tutorial state for testing (remove in production)
                     // UserDefaults.standard.set(false, forKey: "hasSeenTutorial")

@@ -438,7 +438,14 @@ struct ContentView: View {
             PaywallHost(isPresented: $showPaywall)
         }
         .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
+            if shouldSuppressPaywall() { return }
+            // Ensure we don't accidentally open Settings while paywall is up
+            AdsManager.shared.cancelPendingCompletion()
+            showingSettings = false
             showPaywall = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didUnlockPro)) { _ in
+            showPaywall = false
         }
         .sheet(
             isPresented: Binding(
@@ -500,6 +507,11 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingShareSheet, onDismiss: {
             isShowingShareSheet = false
             exportItems = []
+            // After share completes, reset the editor and show the welcome screen to avoid any flicker
+            DispatchQueue.main.async {
+                viewModel.resetAndShowWelcomeScreen()
+                showEffortlessScreen = true
+            }
         }) {
             if !exportItems.isEmpty {
                 ActivityView(activityItems: exportItems)
@@ -701,9 +713,7 @@ struct ContentView: View {
                 }
             })
         }
-        .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(image: $profileImage)
-        }
+        
         // Add state for delete confirmation
         .alert("Delete Table", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -775,6 +785,8 @@ struct ContentView: View {
         viewModel.showingQRCodeSheet = false
         importStartIntent = nil
         showingGuestManager = false
+        // Never open settings if the paywall is visible
+        if showPaywall { return }
         
         // Defer presentation slightly to allow previous dismissals to settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -1157,11 +1169,18 @@ struct ContentView: View {
                             tableShape: viewModel.currentArrangement.tableShape,
                             action: {
                                 // Block only if current is empty AND all future tables are empty
-                                let shouldBlock = viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables()
+                                let isAttemptingTable5OrBeyond = viewModel.tableCollection.currentTableId + 1 >= 4
+                                let lacksPro = !canUseUnlimitedFeatures()
+                                let shouldBlockForPro = isAttemptingTable5OrBeyond && lacksPro
+                                let shouldBlock = shouldBlockForPro || (viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables())
                                 if shouldBlock {
-                                    withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
+                                    if shouldBlockForPro {
+                                        NotificationCenter.default.post(name: .showPaywall, object: nil)
+                                    } else {
+                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                            withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
+                                        }
                                     }
                                 } else {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1815,11 +1834,11 @@ struct ContentView: View {
     }
     private var emptyStateView: some View {
         ZStack {
-            // Gradient background matching screenshot: light blue (top) to light pink (bottom)
-            LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.18), Color.pink.opacity(0.14)]), startPoint: .top, endPoint: .bottom)
+            // Calm animated purple-tinted gradient background
+            MovingCalmGradient()
                 .frame(maxHeight: .infinity)
                 .ignoresSafeArea()
-                .padding(.bottom, -25) // Extend 25pt lower
+                .padding(.bottom, -25)
             VStack(spacing: 16) { // smaller spacing, less vertical space
                 Spacer().frame(height: 100)
                 // add people to be seated screen
@@ -1841,7 +1860,7 @@ struct ContentView: View {
                     .shadow(color: Color.accentColor.opacity(0.08), radius: 4, x: 0, y: 2)
                 Text("Create seating for events")
                     .font(.system(size: 16, weight: .regular)) // Changed from 18 to 16
-                    .foregroundColor(.gray)
+                    .foregroundColor(colorScheme == .dark ? Color.white : Color.black.opacity(0.9))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                     .padding(.top, 0) // Move up by 3 pixels (was -3)
@@ -2369,6 +2388,7 @@ struct ContentView: View {
         // MARK: - Appearance helpers (nested for scoping and compiler performance)
         private struct SettingsThemePickerRow: View {
             @Binding var appTheme: String
+            @AppStorage("customAccentHex") private var customAccentHex: String = "#007AFF"
             var body: some View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -2385,7 +2405,7 @@ struct ContentView: View {
                         ThemeSwatchChip(appTheme: $appTheme, id: "red", label: "Red", colors: [Color.red, Color.orange])
                         ThemeSwatchChip(appTheme: $appTheme, id: "brown", label: "Brown", colors: [Color.brown, Color.orange])
                         ThemeSwatchChip(appTheme: $appTheme, id: "gray", label: "Gray", colors: [Color.gray, Color.black.opacity(0.6)])
-                        ThemeSwatchChip(appTheme: $appTheme, id: "custom", label: "Custom", colors: [Color.accentColor.opacity(0.6), Color.accentColor])
+                        ThemeSwatchChip(appTheme: $appTheme, id: "custom", label: "Custom", colors: [colorFromHex(customAccentHex).opacity(0.6), colorFromHex(customAccentHex)])
                     }
                     .padding(.vertical, 2)
                 }
@@ -2554,7 +2574,40 @@ struct ContentView: View {
                         .accessibilityIdentifier("settings.restartInteractiveTour")
                         .accessibilityLabel("Take a tour")
                     }
-                    // Remove "Help & Tutorials" header per request
+                    // Upgrade CTA (moved above Appearance)
+                    if !RevenueCatManager.shared.state.unlimitedFeatures {
+                        Button(action: {
+                            NotificationCenter.default.post(name: .showPaywall, object: nil)
+                        }) {
+                            HStack(alignment: .center, spacing: 12) {
+                                ZStack {
+                                    Circle().fill(Color.accentColor.opacity(0.15)).frame(width: 38, height: 38)
+                                    Image(systemName: "crown.fill")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.accentColor)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Upgrade to Pro")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                    Text("Unlock all features and remove ads")
+                                        .font(.system(size: 13, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            // Transparent background; subtle divider only
+                            .background(Color.clear)
+                        }
+                        .accessibilityLabel("Upgrade to Pro — unlock all features")
+                    }
+
                     // Appearance Section
                     Section(header: Text("Appearance")) {
                         HStack {
@@ -2583,15 +2636,11 @@ struct ContentView: View {
                                     ThemeSwatch(appTheme: $appTheme, id: "sunset", label: "Sunset", colors: [Color.orange, Color.pink])
                                     ThemeSwatch(appTheme: $appTheme, id: "forest", label: "Forest", colors: [Color.green, Color.teal])
                                     ThemeSwatch(appTheme: $appTheme, id: "midnight", label: "Purple", colors: [Color.indigo, Color.purple])
-                                    ThemeSwatch(appTheme: $appTheme, id: "custom", label: "Custom", colors: [Color.accentColor.opacity(0.6), Color.accentColor])
+                                    ThemeSwatch(appTheme: $appTheme, id: "custom", label: "Custom", colors: [colorFromHex(customAccentHex).opacity(0.6), colorFromHex(customAccentHex)])
                                 }
                                 // Custom color picker shown when Custom theme selected
                                 if appTheme == "custom" {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        // Live accent preview bar above the text, using the chosen color
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(colorFromHex(customAccentHex))
-                                            .frame(height: 10)
                                         Text("Custom Accent Color")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
@@ -2778,6 +2827,8 @@ struct ContentView: View {
                             )
                         }
                     }
+
+                    
 
                     // Permissions Section
                     Section(header: Text("Permissions")) {
@@ -2967,9 +3018,7 @@ struct ContentView: View {
                 .sheet(isPresented: $showMail) {
                     MailViewImpl(result: $mailResult)
                 }
-                .sheet(isPresented: $showingImagePicker) {
-                    ImagePicker(image: $profileImage)
-                }
+                
                 .sheet(isPresented: $showingTutorial) {
                     HelpTutorialView()
                 }
@@ -3105,23 +3154,7 @@ struct ContentView: View {
             } message: {
                 Text("Seat Maker does not have access to your photos. To enable access, go to Settings > Privacy > Photos and turn on Photos for Seat Maker.")
             }
-            .sheet(isPresented: $showingImagePicker) {
-                ImagePicker(image: $profileImage)
-                    .onDisappear {
-                        // Ensure UI updates properly when picker is dismissed
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            // Force UI refresh to prevent glitches
-                            if let data = profileImageData, let img = UIImage(data: data) {
-                                if profileImage != img {
-                                    profileImage = img
-                                }
-                            } else {
-                                // Clear profile image if no data exists
-                                profileImage = nil
-                            }
-                        }
-                    }
-            }
+            
             .onAppear {
                 // Always sync state from storage on appear
                 DispatchQueue.main.async {
@@ -4496,9 +4529,12 @@ struct ContentView: View {
                                         Button(action: {
                                             selectedContacts.remove(contact)
                                         }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.gray)
-                                                .font(.system(size: 14))
+                                            Image(systemName: "xmark")
+                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .padding(4)
+                                                .background(Color.clear)
+                                                .contentShape(Rectangle())
                                         }
                                     }
                                     .padding(.horizontal, 12)
@@ -4602,10 +4638,85 @@ struct ContentView: View {
         let activityItems: [Any]
         
         func makeUIViewController(context: Context) -> UIActivityViewController {
-            UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+            let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+            return vc
         }
         
         func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    }
+    
+    // Smooth, calm, purple-leaning animated gradient for the welcome/empty state
+    struct MovingCalmGradient: View {
+        @State private var animate = false
+        
+        var body: some View {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                ZStack {
+                    // Base wash
+                    LinearGradient(
+                        colors: [
+                            Color.purple.opacity(0.28),
+                            Color.indigo.opacity(0.22),
+                            Color.blue.opacity(0.16)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    // Floating, blurred light spots (very soft)
+                    Group {
+                        Circle()
+                            .fill(
+                                RadialGradient(colors: [Color.purple.opacity(0.40), Color.clear], center: .center, startRadius: 0, endRadius: max(w, h) * 0.45)
+                            )
+                            .frame(width: max(w, h) * 0.9, height: max(w, h) * 0.9)
+                            .offset(x: animate ? w * 0.22 : -w * 0.18, y: animate ? -h * 0.20 : h * 0.18)
+                            .blur(radius: 140)
+                            .opacity(0.45)
+                            .blendMode(.plusLighter)
+                            .animation(.easeInOut(duration: 6).repeatForever(autoreverses: true), value: animate)
+                        
+                        Circle()
+                            .fill(
+                                RadialGradient(colors: [Color.indigo.opacity(0.35), Color.clear], center: .center, startRadius: 0, endRadius: max(w, h) * 0.40)
+                            )
+                            .frame(width: max(w, h) * 0.8, height: max(w, h) * 0.8)
+                            .offset(x: animate ? -w * 0.28 : w * 0.24, y: animate ? h * 0.22 : -h * 0.18)
+                            .blur(radius: 130)
+                            .opacity(0.40)
+                            .blendMode(.plusLighter)
+                            .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true), value: animate)
+                        
+                        Circle()
+                            .fill(
+                                RadialGradient(colors: [Color.pink.opacity(0.25), Color.clear], center: .center, startRadius: 0, endRadius: max(w, h) * 0.42)
+                            )
+                            .frame(width: max(w, h) * 0.85, height: max(w, h) * 0.85)
+                            .offset(x: animate ? w * 0.10 : -w * 0.12, y: animate ? h * 0.16 : -h * 0.14)
+                            .blur(radius: 120)
+                            .opacity(0.35)
+                            .blendMode(.softLight)
+                            .animation(.easeInOut(duration: 8).repeatForever(autoreverses: true), value: animate)
+                    }
+
+                    // Subtle moving sheen to make the gradient feel like it flows
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.05),
+                            Color.clear,
+                            Color.white.opacity(0.04)
+                        ],
+                        startPoint: animate ? .topLeading : .bottomTrailing,
+                        endPoint: animate ? .bottomTrailing : .topLeading
+                    )
+                    .blendMode(.softLight)
+                    .animation(.easeInOut(duration: 7).repeatForever(autoreverses: true), value: animate)
+                }
+                .onAppear { animate = true }
+            }
+        }
     }
     
     struct ImagePicker: UIViewControllerRepresentable {
@@ -4658,9 +4769,12 @@ struct TermsView: View {
                 .font(.title2).fontWeight(.bold)
                     Spacer()
                     Button(action: onDismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.gray)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(8)
+                            .background(Color.clear)
+                            .contentShape(Rectangle())
                     }
                 }
                 .padding(.horizontal)
@@ -5328,9 +5442,6 @@ struct TermsView: View {
                 }
                 .disabled(editingPersonName.isEmpty)
             )
-            .sheet(isPresented: $showingImagePicker) {
-                ImagePicker(image: $profileImage)
-            }
         }
     }
     
@@ -6565,7 +6676,7 @@ struct AllTablesExportView: View {
 
     // Extracted share options UI to avoid large expressions in body
     private var shareOptionsView: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 10) {
             Text("Share Options")
                 .font(.headline)
                 .padding(.bottom, 2)
@@ -6584,14 +6695,8 @@ struct AllTablesExportView: View {
                 // Prepare items for the single root ActivityView sheet
                 parentExportItems = [text]
                 AdsManager.shared.showInterstitialThen {
-                    // Dismiss this export sheet first to avoid multiple-sheet conflicts
+                    // Dismiss this export sheet and present the share sheet.
                     dismiss()
-                    // Reset to a fresh arrangement underneath the share sheet
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        viewModel.resetAndShowWelcomeScreen()
-                        showEffortlessScreen = true
-                    }
-                    // Present the share sheet after the dismissal animation finishes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         parentIsShowingShareSheet = true
                     }
@@ -6626,14 +6731,7 @@ struct AllTablesExportView: View {
                 let promo = "\n\nMade with Seat Maker — get the app: https://apps.apple.com/us/app/seat-maker/id6748284141"
                 parentExportItems = [image, promo]
                 AdsManager.shared.showInterstitialThen {
-                    // Dismiss this export sheet first to avoid multiple-sheet conflicts
                     dismiss()
-                    // Reset to a fresh arrangement underneath the share sheet
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        viewModel.resetAndShowWelcomeScreen()
-                        showEffortlessScreen = true
-                    }
-                    // Present the share sheet after the dismissal animation finishes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         parentIsShowingShareSheet = true
                     }
@@ -6681,6 +6779,7 @@ struct AllTablesExportView: View {
                     .truncationMode(.tail)
             }
             .buttonStyle(PlainButtonStyle())
+            .transition(.opacity.combined(with: .scale))
         }
     }
 
@@ -8259,9 +8358,9 @@ struct TableManagerView: View {
     }
 
     private func createNewTableAndOpen() {
-        // Gate creating additional tables behind Pro if more than 1 exists
+        // Gate creating additional tables behind Pro if more than 4 exists
         let existingCount = viewModel.tableCollection.tables.count
-        if existingCount >= 1 && !canUseUnlimitedFeatures() {
+        if existingCount >= 4 && !canUseUnlimitedFeatures() {
             NotificationCenter.default.post(name: .showPaywall, object: nil)
             return
         }

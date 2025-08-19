@@ -5,7 +5,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.austinfrankel.SeatMaker1</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,7 +28,6 @@
 	<string>We use your device's identifier to deliver more relevant ads. You can change this anytime in Settings.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
-		<!-- Minimal Google Mobile Ads SKAdNetwork identifiers; see https://developers.google.com/admob/ios/ios14 -->
 		<dict>
 			<key>SKAdNetworkIdentifier</key>
 			<string>cstr6suwn9.skadnetwork</string>
