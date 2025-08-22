@@ -9,9 +9,18 @@ import UIKit
 import GoogleMobileAds
 import AppTrackingTransparency
 
+@MainActor
 final class AdsManager: NSObject, FullScreenContentDelegate {
     static let shared = AdsManager()
     private override init() {}
+
+    // MARK: - Configuration helpers
+    private static let testAppId = "ca-app-pub-3940256099942544~1458002511"
+    private static let testInterstitialUnitId = "ca-app-pub-3940256099942544/4411468910"
+    private static var productionInterstitialUnitId: String? {
+        // Provide your real interstitial unit id in Info.plist under key `GADInterstitialAdUnitId`
+        return Bundle.main.object(forInfoDictionaryKey: "GADInterstitialAdUnitId") as? String
+    }
 
     private(set) var isConfigured: Bool = false
     private var interstitial: InterstitialAd?
@@ -32,20 +41,32 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
         // Disable mediation to speed up initialization
         MobileAds.shared.disableMediationInitialization()
         
-        // Start the SDK with minimal completion handler
-        MobileAds.shared.start(completionHandler: { status in
+        // Start the SDK with minimal completion handler and warm an interstitial ASAP
+        MobileAds.shared.start(completionHandler: { [weak self] status in
             print("[Ads] SDK started successfully")
+            // Kick off a first load immediately once the SDK is ready
+            self?.preloadInterstitial()
         })
-        
-        // Always preload immediately after a short delay to ensure SDK is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+
+        #if !DEBUG
+        // Guardrail to avoid shipping with the Google sample App ID
+        if let appId = Bundle.main.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String,
+           appId == Self.testAppId {
+            print("[Ads][WARNING] Info.plist GADApplicationIdentifier is the Google test App ID. Replace with your real AdMob App ID before release.")
+        }
+        #endif
+        // Backup preload shortly after startup in case the first call raced with other setup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.preloadInterstitial()
         }
     }
 
     func preloadInterstitial() {
-        // Respect RevenueCat entitlements
-        let shouldShowAds = !RevenueCatManager.shared.state.adsDisabled
+        // Determine at runtime whether ads should be shown. FORCE_ADS=1 can override for diagnostics.
+        let shouldShowAds = canShowAds() || ProcessInfo.processInfo.environment["FORCE_ADS"] == "1"
+        #if DEBUG
+        print("[Ads] preloadInterstitial shouldShowAds=\(shouldShowAds) pro=\(RevenueCatManager.shared.state.hasPro) removeAds=\(RevenueCatManager.shared.state.hasRemoveAds)")
+        #endif
         if !shouldShowAds {
             interstitial = nil
             return
@@ -55,19 +76,30 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
             return
         }
         let request = Request()
+        if #available(iOS 14, *) {
+            if ATTrackingManager.trackingAuthorizationStatus != .authorized {
+                let extras = Extras()
+                extras.additionalParameters = ["npa": "1"]
+                request.register(extras)
+            }
+        }
+        // Select ad unit id per build configuration
         #if DEBUG
-        // For device testing, you can add your device hash to enable test ads.
-        // MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [ GADSimulatorID ]
+        let adUnitId = Self.testInterstitialUnitId
+        #else
+        guard let adUnitId = Self.productionInterstitialUnitId, adUnitId.isEmpty == false, adUnitId != Self.testInterstitialUnitId else {
+            print("[Ads] ERROR: Missing production interstitial ad unit id in Info.plist (key: GADInterstitialAdUnitId). Skipping load.")
+            return
+        }
         #endif
-        // Test interstitial ad unit ID from Google
-        let testInterstitial = "ca-app-pub-3940256099942544/4411468910"
         print("[Ads] Loading interstitial…")
-        InterstitialAd.load(with: testInterstitial, request: request) { [weak self] ad, error in
+        InterstitialAd.load(with: adUnitId, request: request) { [weak self] ad, error in
             if let error = error {
                 print("[Ads] Failed to load interstitial: \(error)")
                 return
             }
             print("[Ads] Interstitial loaded")
+            // Safely assign on main actor
             self?.interstitial = ad
             self?.interstitial?.fullScreenContentDelegate = self
         }
@@ -81,8 +113,8 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
     /// Presents an interstitial if available, then calls completion after it is dismissed.
     /// If ads are disabled, suppressed, not ready, or cannot be presented, calls completion immediately.
     func showInterstitialThen(_ completion: @escaping () -> Void) {
-        // Do not show if user purchased remove_ads or pro
-        let shouldShowAds = !RevenueCatManager.shared.state.adsDisabled
+        // Determine at runtime whether ads should be shown. FORCE_ADS=1 can override for diagnostics.
+        let shouldShowAds = canShowAds() || ProcessInfo.processInfo.environment["FORCE_ADS"] == "1"
         // Respect temporary suppression
         let isSuppressed = (interstitialSuppressedUntil ?? .distantPast) > Date()
 
@@ -93,7 +125,24 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
         }()
 
         // If ads shouldn't show or we are frequency capped, run completion now
-        if !shouldShowAds || isSuppressed || isFrequencyCapped {
+        if !shouldShowAds {
+            #if DEBUG
+            print("[Ads] Skipping interstitial: ads disabled by gating")
+            #endif
+            DispatchQueue.main.async { completion() }
+            return
+        }
+        if isSuppressed {
+            #if DEBUG
+            print("[Ads] Skipping interstitial: temporarily suppressed until \(interstitialSuppressedUntil?.description ?? "-")")
+            #endif
+            DispatchQueue.main.async { completion() }
+            return
+        }
+        if isFrequencyCapped {
+            #if DEBUG
+            print("[Ads] Skipping interstitial: frequency capped (min interval = \(minimumInterstitialInterval)s)")
+            #endif
             DispatchQueue.main.async { completion() }
             return
         }
@@ -104,36 +153,97 @@ final class AdsManager: NSObject, FullScreenContentDelegate {
             return
         }
 
-        guard let presenter = Self.topMostViewController(), let interstitial = interstitial else {
-            // No ad ready → preload and continue immediately
+        // Helper to actually present a ready interstitial
+        func presentReadyAd(_ ad: InterstitialAd) {
+            guard let presenter = Self.topMostViewController() else {
+                #if DEBUG
+                print("[Ads] Cannot present interstitial: no presenter available")
+                #endif
+                DispatchQueue.main.async { completion() }
+                return
+            }
+            // Ensure we're attached to a window; if not, retry once shortly
+            guard presenter.view.window != nil else {
+                #if DEBUG
+                print("[Ads] Presenter not in window yet; retrying shortly")
+                #endif
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    guard let self = self else {
+                        DispatchQueue.main.async { completion() }
+                        return
+                    }
+                    if let retryPresenter = Self.topMostViewController(), retryPresenter.view.window != nil {
+                        self.pendingCompletion = completion
+                        self.interstitial = nil
+                        self.isPresentingInterstitial = true
+                        ad.present(from: retryPresenter)
+                        self.preloadInterstitial()
+                    } else {
+                        self.preloadInterstitial()
+                        DispatchQueue.main.async { completion() }
+                    }
+                }
+                return
+            }
+            pendingCompletion = completion
+            self.interstitial = nil
+            isPresentingInterstitial = true
+            ad.present(from: presenter)
             preloadInterstitial()
-            DispatchQueue.main.async { completion() }
-            return
         }
 
-        // Avoid presenting over any active modal/sheet or while not in the window hierarchy
-        if presenter.presentedViewController != nil || presenter.view.window == nil {
-            // Cannot present now; run completion and try to preload for next time
-            preloadInterstitial()
-            DispatchQueue.main.async { completion() }
-            return
-        }
-
-        // Present the ad and store completion for when it dismisses
-        pendingCompletion = completion
-        if #available(iOS 14, *) {
-            // Request tracking authorization right before the first ad presentation
-            ATTrackingManager.requestTrackingAuthorization { _ in
-                DispatchQueue.main.async {
-                    interstitial.present(from: presenter)
+        // Request ATT (if needed) before loading/presenting
+        let proceed: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            if let ready = self.interstitial {
+                presentReadyAd(ready)
+            } else {
+                // Load and present when ready; if load fails, continue the flow without blocking
+                #if DEBUG
+                print("[Ads] No interstitial ready; loading now and will present if it loads in time…")
+                #endif
+                let request = Request()
+                if #available(iOS 14, *) {
+                    if ATTrackingManager.trackingAuthorizationStatus != .authorized {
+                        let extras = Extras()
+                        extras.additionalParameters = ["npa": "1"]
+                        request.register(extras)
+                    }
+                }
+                #if DEBUG
+                let adUnitId = Self.testInterstitialUnitId
+                #else
+                guard let adUnitId = Self.productionInterstitialUnitId, adUnitId.isEmpty == false, adUnitId != Self.testInterstitialUnitId else {
+                    #if DEBUG
+                    print("[Ads] ERROR: Missing production interstitial ad unit id in Info.plist (key: GADInterstitialAdUnitId). Skipping load.")
+                    #endif
+                    DispatchQueue.main.async { completion() }
+                    return
+                }
+                #endif
+                InterstitialAd.load(with: adUnitId, request: request) { [weak self] ad, error in
+                    guard let self = self else { return }
+                    if let ad = ad {
+                        self.interstitial = ad
+                        self.interstitial?.fullScreenContentDelegate = self
+                        presentReadyAd(ad)
+                    } else {
+                        #if DEBUG
+                        print("[Ads] Interstitial load-on-demand failed: \(error?.localizedDescription ?? "nil")")
+                        #endif
+                        DispatchQueue.main.async { completion() }
+                    }
                 }
             }
-        } else {
-            interstitial.present(from: presenter)
         }
-        self.interstitial = nil
-        isPresentingInterstitial = true
-        preloadInterstitial()
+
+        if #available(iOS 14, *) {
+            ATTrackingManager.requestTrackingAuthorization { _ in
+                DispatchQueue.main.async { proceed() }
+            }
+        } else {
+            proceed()
+        }
     }
 
     /// Cancels any pending completion scheduled to run after the current interstitial is dismissed.

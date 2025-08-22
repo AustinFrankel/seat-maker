@@ -8,9 +8,11 @@
 import SwiftUI
 import UIKit
 import UserNotifications
+#if canImport(AppTrackingTransparency)
+import AppTrackingTransparency
+#endif
 #if canImport(GoogleMobileAds)
 import GoogleMobileAds
-import AppTrackingTransparency
 #endif
 #if canImport(RevenueCat)
 import RevenueCat
@@ -120,21 +122,17 @@ struct TableMakerPublishApp: App {
                 .background(resolveThemeBackground(for: appTheme, customHex: customAccentHex, isDark: isDarkMode).ignoresSafeArea())
                 // Respect the explicit dark mode toggle globally
                 .preferredColorScheme(isDarkMode ? .dark : .light)
-                // Gate non-classic themes behind Pro
-                .onChange(of: appTheme) { newTheme in
-                    if newTheme != "classic" && !canUseUnlimitedFeatures() {
-                        // Revert and present paywall
-                        appTheme = "classic"
-                        NotificationCenter.default.post(name: .showPaywall, object: nil)
-                    }
-                }
+                // Paywall disabled: allow all themes
                 .onAppear {
                     // Reset tutorial state for testing (remove in production)
                     // UserDefaults.standard.set(false, forKey: "hasSeenTutorial")
                     NotificationService.shared.configureOnLaunch()
                     // Configure RevenueCat before Ads so entitlements are known
                     RevenueCatManager.shared.configure()
+                    // Configure ads SDK without prompting for ATT at launch.
+                    // ATT will be requested contextually before first ad presentation.
                     AdsManager.shared.configure()
+                    // Note: configure() already schedules a preload shortly after launch.
                     // If Part 1 finished and interactive onboarding not completed, ensure controller can start when main appears
                     if hasSeenTutorial && !hasCompletedInteractiveOnboarding {
                         // No-op here; start occurs in RootWithLaunch onAppear of Content

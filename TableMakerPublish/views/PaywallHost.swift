@@ -11,8 +11,10 @@ struct PaywallHost: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        // Always present our custom replica so the design matches across builds
+        // Always use the custom replica paywall to avoid nested sheet conflicts
         ReplicaPaywallView(isPresented: $isPresented)
+        .onAppear { RevenueCatManager.shared.isPaywallActive = true }
+        .onDisappear { RevenueCatManager.shared.isPaywallActive = false }
     }
 
     #if canImport(RevenueCatUI)
@@ -101,6 +103,15 @@ private struct ReplicaPaywallView: View {
                     .multilineTextAlignment(.center)
                     ratingRow
                     planCards
+                    #if canImport(RevenueCat)
+                    if rc.offering == nil && rc.fallbackProducts.isEmpty {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Loading products…")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    #endif
                     continueButton
                     if let err = inlineError {
                         Text(err).font(.footnote).foregroundColor(.red)
@@ -124,12 +135,9 @@ private struct ReplicaPaywallView: View {
         // Anchor the footer on the bottom safe area as in the screenshot
         .safeAreaInset(edge: .bottom) { footerBar }
         .onAppear {
-            if selectedPlan == nil {
-                #if canImport(RevenueCat)
-                if resolvePlan(.unlimited) != nil { selectedPlan = .unlimited }
-                else if resolvePlan(.removeAds) != nil { selectedPlan = .removeAds }
-                #endif
-            }
+            #if canImport(RevenueCat)
+            // Do not preselect a plan. Both options should start unchecked.
+            #endif
         }
         .onChange(of: rc.state.hasPro) { hasPro in
             if hasPro {
@@ -137,12 +145,11 @@ private struct ReplicaPaywallView: View {
                 isPresented = false
             }
         }
-        .onChange(of: rc.state.hasRemoveAds) { hasRA in
-            if hasRA {
-                AdsManager.shared.cancelPendingCompletion()
-                isPresented = false
-            }
-        }
+        #if canImport(RevenueCat)
+        // Keep both plans unselected even as offerings/products load
+        .onChange(of: rc.offering) { _ in }
+        .onChange(of: rc.fallbackProducts) { _ in }
+        #endif
     }
 
     // MARK: - UI components
@@ -158,7 +165,7 @@ private struct ReplicaPaywallView: View {
             .frame(height: 260)
             .frame(maxWidth: .infinity, alignment: .top)
             .ignoresSafeArea(edges: .top)
-            .offset(y: 30)
+            .offset(y: -20)
     }
 
     private var logoArtwork: some View {
@@ -246,42 +253,63 @@ private struct ReplicaPaywallView: View {
 
     private var footerBar: some View {
         HStack(spacing: 12) {
-            Text("One-time purchase. Restore anytime.")
-                .foregroundColor(.secondary)
-            Spacer()
             Button("Restore") { restorePurchases() }
                 .font(.footnote)
             if let privacy = URL(string: "https://www.seatmakerapp.com/privacy") {
                 Link("Privacy", destination: privacy)
                     .font(.footnote)
             }
-            if let terms = URL(string: "https://www.seatmakerapp.com/terms") {
-                Link("Terms", destination: terms)
-                    .font(.footnote)
-            }
+            Spacer()
         }
         .font(.footnote)
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
         .background(Color.clear)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("One-time purchase. Restore, Privacy Policy, Terms of Use"))
+        .accessibilityLabel(Text("Restore purchases, Privacy Policy"))
     }
 
     // MARK: - Actions
     private func continueTapped() {
         #if canImport(RevenueCat)
+        // Do not attempt a purchase if device cannot make payments
+        if !Purchases.canMakePayments() {
+            inlineError = "Purchases are disabled on this device."
+            return
+        }
         guard let selectedPlan else { return }
         inlineError = nil
-        isProcessing = true
+        // Resolve the actual target first; if not found, do not enter a stuck processing state
+        let maybeTarget: PlanTarget?
         switch selectedPlan {
         case .unlimited:
-            if let target = resolvePlan(.unlimited) { purchase(target) }
+            maybeTarget = resolvePlan(.unlimited)
         case .removeAds:
-            if let target = resolvePlan(.removeAds) { purchase(target) }
+            maybeTarget = resolvePlan(.removeAds)
+        }
+
+        guard let target = maybeTarget else {
+            // Show a helpful message and try refreshing products
+            inlineError = "We couldn’t load this product. Please try again in a moment."
+            RevenueCatManager.shared.refreshOfferings()
+            return
+        }
+
+        DispatchQueue.main.async {
+            isProcessing = true
+            purchase(target)
+        }
+        // Safety valve: if StoreKit fails to present for any reason, clear processing after a short timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            if isProcessing {
+                isProcessing = false
+                inlineError = "The App Store didn’t respond. Please try again in a moment."
+            }
         }
         #endif
     }
+
+    // Intentionally no preselection; both plans remain unchecked until the user taps one
 
     private func restorePurchases() {
         RevenueCatManager.shared.restore { result in
@@ -310,6 +338,8 @@ private struct ReplicaPaywallView: View {
     private func purchase(_ target: PlanTarget) {
         switch target {
         case .package(let pkg):
+            // Suppress interstitials around purchase to avoid overlapping presentations
+            AdsManager.shared.suppressInterstitials(for: 10)
             Purchases.shared.purchase(package: pkg) { _, info, error, userCancelled in
                 DispatchQueue.main.async {
                     RevenueCatManager.shared.applyCustomerInfo(info)
@@ -320,6 +350,8 @@ private struct ReplicaPaywallView: View {
                 }
             }
         case .product(let product):
+            // Suppress interstitials around purchase to avoid overlapping presentations
+            AdsManager.shared.suppressInterstitials(for: 10)
             Purchases.shared.purchase(product: product) { _, info, error, userCancelled in
                 DispatchQueue.main.async {
                     RevenueCatManager.shared.applyCustomerInfo(info)
@@ -333,36 +365,61 @@ private struct ReplicaPaywallView: View {
     }
 
     private func resolvePlan(_ type: PlanType) -> PlanTarget? {
-        if let offering = rc.offering {
-            if let pkg = offering.availablePackages.first(where: { matches(type: type, package: $0) }) {
-                return .package(pkg)
-            }
+        #if canImport(RevenueCat)
+        // Prefer exact product ID matches. No heuristics, no positional guesses.
+        if RevenueCatManager.shared.preferLocalStoreKit {
+            if let direct = resolveFromFallbackProducts(type) { return direct }
+            if let viaOffering = resolveFromOffering(type) { return viaOffering }
+            return nil
         }
-        if let prod = rc.fallbackProducts.first(where: { matches(type: type, product: $0) }) {
-            return .product(prod)
+        if let viaOffering = resolveFromOffering(type) { return viaOffering }
+        if let direct = resolveFromFallbackProducts(type) { return direct }
+        #endif
+        return nil
+    }
+
+    private func resolveFromOffering(_ type: PlanType) -> PlanTarget? {
+        guard let offering = rc.offering else { return nil }
+        let packages = offering.availablePackages
+        switch type {
+        case .unlimited:
+            if let pkg = packages.first(where: { pkg in
+                let pid = pkg.storeProduct.productIdentifier
+                return pid == ProductID.proLifetime || pid == ProductID.localPro
+            }) { return .package(pkg) }
+        case .removeAds:
+            if let pkg = packages.first(where: { pkg in
+                let pid = pkg.storeProduct.productIdentifier
+                return pid == ProductID.removeAdsLifetime || pid == ProductID.localRemoveAds
+            }) { return .package(pkg) }
         }
         return nil
     }
 
-    private func matches(type: PlanType, package: Package) -> Bool {
-        let pid = package.storeProduct.productIdentifier.lowercased()
-        let id = package.identifier.lowercased()
+    private func resolveFromFallbackProducts(_ type: PlanType) -> PlanTarget? {
+        if rc.fallbackProducts.isEmpty { return nil }
         switch type {
         case .unlimited:
-            return pid.contains("pro") || pid.contains("unlimited") || (id.contains("lifetime") && !pid.contains("remove"))
+            if let prod = rc.fallbackProducts.first(where: { p in
+                let id = p.productIdentifier
+                return id == ProductID.proLifetime || id == ProductID.localPro
+            }) { return .product(prod) }
         case .removeAds:
-            return pid.contains("removeads") || pid.contains("remove_ads") || id.contains("remove")
+            if let prod = rc.fallbackProducts.first(where: { p in
+                let id = p.productIdentifier
+                return id == ProductID.removeAdsLifetime || id == ProductID.localRemoveAds
+            }) { return .product(prod) }
         }
+        return nil
     }
 
-    private func matches(type: PlanType, product: StoreProduct) -> Bool {
-        let id = product.productIdentifier.lowercased()
-        switch type {
-        case .unlimited:
-            return id.contains("pro") || id.contains("unlimited") || id.contains("lifetime_pro") || id == "com.seatmaker.pro.lifetime"
-        case .removeAds:
-            return id.contains("removeads") || id.contains("remove_ads") || id == "com.seatmaker.removeads_lifetime"
-        }
+    // Exact product IDs used for mapping
+    private enum ProductID {
+        static let proLifetime = "com.seatmaker.pro.lifetime"
+        static let removeAdsLifetime = "com.seatmaker.removeads_lifetime"
+        // Local StoreKit configuration IDs for development
+        static let localPro = EntitlementID.pro
+        static let localRemoveAds = EntitlementID.removeAds
     }
     #endif
 }

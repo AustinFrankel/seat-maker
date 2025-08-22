@@ -5,7 +5,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
 
     private let center = UNUserNotificationCenter.current()
-    private let dailyReminderId = "tm.daily.reminder"
+    private let weeklyReminderId = "tm.weekly.reminder"
+    private let legacyDailyId = "tm.daily.reminder"
 
     private override init() {
         super.init()
@@ -21,7 +22,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         center.delegate = self
         let enabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
         if enabled {
-            scheduleDailyReminder()
+            scheduleWeeklyReminder()
         }
     }
 
@@ -33,7 +34,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             case .notDetermined:
                 self.center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
                     if granted {
-                        self.scheduleDailyReminder()
+                        self.scheduleWeeklyReminder()
                     } else {
                         UserDefaults.standard.set(false, forKey: "notificationsEnabled")
                     }
@@ -41,7 +42,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             case .denied:
                 UserDefaults.standard.set(false, forKey: "notificationsEnabled")
             case .authorized, .provisional, .ephemeral:
-                self.scheduleDailyReminder()
+                self.scheduleWeeklyReminder()
             @unknown default:
                 break
             }
@@ -50,7 +51,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     func disableReminders() {
         UserDefaults.standard.set(false, forKey: "notificationsEnabled")
-        center.removePendingNotificationRequests(withIdentifiers: [dailyReminderId])
+        center.removePendingNotificationRequests(withIdentifiers: [weeklyReminderId, legacyDailyId])
     }
 
     func sendTestReminder() {
@@ -77,21 +78,17 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         center.add(request, withCompletionHandler: nil)
     }
 
-    private func scheduleDailyReminder() {
-        // Idempotent: if a request with the same identifier already exists at 10:00, do nothing
-        center.getPendingNotificationRequests { requests in
-            let alreadyScheduled = requests.contains { $0.identifier == self.dailyReminderId }
-            if alreadyScheduled {
-                return
-            }
-            var dateComponents = DateComponents()
-            dateComponents.hour = 10
-            dateComponents.minute = 0
-            let content = self.buildContent()
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-            let request = UNNotificationRequest(identifier: self.dailyReminderId, content: content, trigger: trigger)
-            self.center.add(request, withCompletionHandler: nil)
-        }
+    private func scheduleWeeklyReminder() {
+        // Replace any legacy daily reminder with a single weekly reminder on Sunday at 10:00
+        center.removePendingNotificationRequests(withIdentifiers: [legacyDailyId, weeklyReminderId])
+        var dateComponents = DateComponents()
+        dateComponents.weekday = 1 // Sunday (Gregorian calendar)
+        dateComponents.hour = 10
+        dateComponents.minute = 0
+        let content = self.buildContent()
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: weeklyReminderId, content: content, trigger: trigger)
+        center.add(request, withCompletionHandler: nil)
     }
 
     private func buildContent() -> UNMutableNotificationContent {

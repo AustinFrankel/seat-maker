@@ -29,7 +29,7 @@ final class PurchaseState: ObservableObject {
         var newHasRemoveAds = e[EntitlementID.removeAds]?.isActive == true
         // Fallback: infer from active subscriptions or purchased product identifiers if entitlements keys don't match
         if (!newHasPro || !newHasRemoveAds) {
-            let activeProductIds: [String] = Array(info.activeSubscriptions) + info.nonSubscriptionTransactions.map { $0.productIdentifier }
+            let activeProductIds: [String] = Array(info.activeSubscriptions) + info.nonSubscriptions.map { $0.productIdentifier }
             let lower = activeProductIds.map { $0.lowercased() }
             if !newHasPro {
                 newHasPro = lower.contains { id in id.contains("pro") || id.contains("unlimited") || id.contains("lifetime_pro") || id == "com.seatmaker.pro.lifetime" }
@@ -43,6 +43,10 @@ final class PurchaseState: ObservableObject {
         // Persist so paywall suppression works across cold starts / offline
         UserDefaults.standard.set(newHasPro, forKey: "entitlement_hasPro")
         UserDefaults.standard.set(newHasRemoveAds, forKey: "entitlement_hasRemoveAds")
+        // Notify Ads layer to react immediately to entitlement changes
+        DispatchQueue.main.async {
+            AdsManager.shared.preloadInterstitial()
+        }
         // Post unlock notification when Pro becomes active
         if !wasPro && hasPro {
             NotificationCenter.default.post(name: .didUnlockPro, object: nil)
@@ -54,9 +58,19 @@ final class RevenueCatManager: NSObject, ObservableObject {
     static let shared = RevenueCatManager()
 
     @Published var offering: Offering?
+    // True while the paywall is presented to the user (any implementation/UI)
+    @Published var isPaywallActive: Bool = false
     #if canImport(RevenueCat)
     // When Offerings aren't configured or cannot be fetched, we use direct product fetch as a fallback
     @Published var fallbackProducts: [StoreProduct] = []
+    #endif
+    #if DEBUG
+    /// In DEBUG builds, prefer local StoreKit testing on both Simulator and physical devices.
+    /// This guarantees the StoreKit purchase sheet appears while developing, using the
+    /// `SeatMaker.storekit` configuration attached to the scheme.
+    @Published var preferLocalStoreKit: Bool = true
+    #else
+    @Published var preferLocalStoreKit: Bool = false
     #endif
     let state = PurchaseState()
 
@@ -83,6 +97,10 @@ final class RevenueCatManager: NSObject, ObservableObject {
         // Fetch current customer info + offerings
         refreshCustomerInfo()
         refreshOfferings()
+
+        // Always preload direct products so the Apple purchase sheet can be presented
+        // even if Offerings fail to load or mapping heuristics miss.
+        fetchFallbackProducts()
 
         #if DEBUG
         // Helpful runtime diagnostics in debug builds
@@ -118,7 +136,10 @@ final class RevenueCatManager: NSObject, ObservableObject {
             if let current = offerings?.current {
                 print("RC offering: \(current.identifier) packages=\(current.availablePackages.count)")
                 self?.offering = current
-                self?.fallbackProducts = []
+                // Keep fallback products preloaded to guarantee purchase sheet availability
+                if self?.fallbackProducts.isEmpty == true {
+                    self?.fetchFallbackProducts()
+                }
             } else {
                 print("RC offerings current is nil — falling back to direct product fetch")
                 self?.offering = nil
@@ -203,7 +224,8 @@ func canShowAds() -> Bool {
 }
 
 func canUseUnlimitedFeatures() -> Bool {
-    RevenueCatManager.shared.state.unlimitedFeatures
+    // Temporarily grant unlimited features to all users
+    return true
 }
 
 // MARK: - Diagnostics
@@ -240,7 +262,8 @@ extension Notification.Name {
 // MARK: - Paywall presentation suppression helper
 /// Returns true when the paywall should not be shown (e.g., user already has Pro)
 func shouldSuppressPaywall() -> Bool {
-    return canUseUnlimitedFeatures()
+    // Always suppress paywall presentation
+    return true
 }
 
 

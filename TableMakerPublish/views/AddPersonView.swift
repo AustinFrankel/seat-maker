@@ -70,15 +70,20 @@ struct ContactsListView: View {
                 }
                 
                 if filteredContacts.isEmpty {
-                    VStack {
-                        Spacer()
-                        Text("No contacts found")
-                            .foregroundColor(.secondary)
-                            .onAppear {
-                                // If nothing is available, prompt user to grant access via settings
-                                NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
-                            }
-                        Spacer()
+                    if contacts.isEmpty {
+                        VStack {
+                            Spacer()
+                            Text("No contacts available. Check Settings > Privacy > Contacts for Seat Maker.")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    } else {
+                        VStack {
+                            Spacer()
+                            Text("No matching contacts")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
                     }
                 } else {
                     List {
@@ -189,36 +194,7 @@ struct AddPersonView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
                         // Name input with suggestions (top)
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField(NSLocalizedString("Name", comment: "Placeholder for name input"), text: $newPersonName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .textInputAutocapitalization(.words)
-                                .focused($isFocused)
-                                .onChange(of: newPersonName) { newValue in
-                                    viewModel.getSuggestedNames(for: newValue)
-                                }
-
-                            // Name suggestions
-                            if !newPersonName.isEmpty && !viewModel.suggestedNames.isEmpty {
-                                ScrollView {
-                                    VStack(alignment: .leading) {
-                                        ForEach(viewModel.suggestedNames, id: \.self) { name in
-                                            Button(action: { newPersonName = name }) {
-                                                Text(name)
-                                                    .padding(.horizontal, 12)
-                                                    .padding(.vertical, 12)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .background(Color.blue.opacity(0.1))
-                                                    .cornerRadius(8)
-                                            }
-                                            .padding(.vertical, 2)
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
-                                }
-                                .frame(maxHeight: UIScreen.main.bounds.height * 0.25)
-                            }
-                        }
+                        nameInputSection
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding([.horizontal, .top])
@@ -226,62 +202,7 @@ struct AddPersonView: View {
                 }
 
                 // Bottom-anchored import actions
-                VStack(spacing: 10) {
-                    // Import from contacts (now first)
-                    Button(action: {
-                        CNContactStore().requestAccess(for: .contacts) { granted, _ in
-                            DispatchQueue.main.async {
-                                if granted {
-                                    showingContactsPicker = true
-                                    viewModel.fetchContacts()
-                                } else {
-                                    NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
-                                    permissionDeniedContacts = true
-                                }
-                            }
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "person.crop.circle.badge.plus")
-                            Text(NSLocalizedString("Import from Contacts", comment: "Button to import from contacts"))
-                                .fontWeight(.semibold)
-                        }
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
-                        .frame(minHeight: 56)
-                        .frame(maxWidth: 320)
-                        .background(Color.blue.opacity(0.12))
-                        .cornerRadius(16)
-                    }
-                    
-                    // Import from List (present as full-screen cover over this sheet)
-                    Button(action: {
-                        // Present Import flow immediately without dismissing this sheet
-                        importStartIntent = .text
-                    }) {
-                        HStack {
-                            Image(systemName: "text.badge.plus")
-                            Text("Import from List")
-                                .fontWeight(.semibold)
-                        }
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
-                        .frame(minHeight: 56)
-                        .frame(maxWidth: 320)
-                        .background(Color.blue.opacity(0.12))
-                        .cornerRadius(16)
-                    }
-                    .padding(.top, 8)
-
-                    if viewModel.isLoadingContacts {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                    }
-                }
+                bottomImportActions
                 .padding(.horizontal)
                 .padding(.bottom, 2) // ~10px lower toward the bottom
                 .background(.ultraThinMaterial)
@@ -302,31 +223,7 @@ struct AddPersonView: View {
                 viewModel.isLoadingContacts = false
                 isPresented = false
             }) {
-                ContactsListView(
-                    contacts: viewModel.contacts,
-                    searchText: newPersonName,
-                    onSelect: { names in
-                        Task { @MainActor in
-                            for name in names {
-                                if !name.isEmpty && !viewModel.currentArrangement.people.contains(where: { $0.name.lowercased() == name.lowercased() }) {
-                                    viewModel.addPerson(name: name)
-                                }
-                            }
-                            showingContactsPicker = false
-                            isPresented = false
-                            // Ensure main screen shows the table after importing contacts
-                            NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
-                        }
-                    },
-                    onSmartSeating: { names in
-                        Task { @MainActor in
-                            viewModel.smartCreateTables(from: names)
-                            showingContactsPicker = false
-                            isPresented = false
-                            NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
-                        }
-                    }
-                )
+                contactsListCoverView
             }
             // Import from list flow presented over this sheet to avoid nested-sheet conflicts
             .fullScreenCover(
@@ -379,6 +276,126 @@ struct AddPersonView: View {
                 NotificationCenter.default.removeObserver(self, name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
             }
         }
+    }
+
+    // Extracted sections to reduce type-checking complexity
+    private var nameInputSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(NSLocalizedString("Name", comment: "Placeholder for name input"), text: $newPersonName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textInputAutocapitalization(.words)
+                .focused($isFocused)
+                .onChange(of: newPersonName) { newValue in
+                    viewModel.getSuggestedNames(for: newValue)
+                }
+
+            if !newPersonName.isEmpty && !viewModel.suggestedNames.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading) {
+                        ForEach(viewModel.suggestedNames, id: \.self) { name in
+                            Button(action: { newPersonName = name }) {
+                                Text(name)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.25)
+            }
+        }
+    }
+
+    private var bottomImportActions: some View {
+        VStack(spacing: 10) {
+            Button(action: {
+                if RevenueCatManager.shared.isPaywallActive { return }
+                if viewModel.isFetchingContacts { return }
+                CNContactStore().requestAccess(for: .contacts) { granted, _ in
+                    DispatchQueue.main.async {
+                        if granted {
+                            showingContactsPicker = true
+                            viewModel.fetchContacts()
+                        } else {
+                            NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
+                            permissionDeniedContacts = true
+                        }
+                    }
+                }
+            }) {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                    Text(NSLocalizedString("Import from Contacts", comment: "Button to import from contacts"))
+                        .fontWeight(.semibold)
+                }
+                .font(.title3)
+                .foregroundColor(.blue)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .frame(minHeight: 56)
+                .frame(maxWidth: 320)
+                .background(Color.blue.opacity(0.12))
+                .cornerRadius(16)
+            }
+
+            Button(action: {
+                importStartIntent = .text
+            }) {
+                HStack {
+                    Image(systemName: "text.badge.plus")
+                    Text("Import from List")
+                        .fontWeight(.semibold)
+                }
+                .font(.title3)
+                .foregroundColor(.blue)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .frame(minHeight: 56)
+                .frame(maxWidth: 320)
+                .background(Color.blue.opacity(0.12))
+                .cornerRadius(16)
+            }
+            .padding(.top, 8)
+
+            if viewModel.isLoadingContacts {
+                ProgressView()
+                    .scaleEffect(1.2)
+            }
+        }
+    }
+
+    private var contactsListCoverView: some View {
+        ContactsListView(
+            contacts: viewModel.contacts,
+            searchText: newPersonName,
+            onSelect: { names in
+                Task { @MainActor in
+                    for name in names {
+                        if !name.isEmpty && !viewModel.currentArrangement.people.contains(where: { $0.name.lowercased() == name.lowercased() }) {
+                            viewModel.addPerson(name: name)
+                        }
+                    }
+                    showingContactsPicker = false
+                    isPresented = false
+                    NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
+                }
+            },
+            onSmartSeating: { names in
+                Task { @MainActor in
+                    AdsManager.shared.showInterstitialThen {
+                        viewModel.smartCreateTables(from: names)
+                        showingContactsPicker = false
+                        isPresented = false
+                        NotificationCenter.default.post(name: Notification.Name("HideEffortlessScreen"), object: nil)
+                    }
+                }
+            }
+        )
     }
     
     private func addPerson() {

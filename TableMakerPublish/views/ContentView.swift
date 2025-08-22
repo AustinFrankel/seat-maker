@@ -1,5 +1,6 @@
 import SwiftUI
 import Contacts
+import ContactsUI
 import MessageUI
 import UIKit
 import CoreImage.CIFilterBuiltins
@@ -219,6 +220,7 @@ struct ContentView: View {
     @AppStorage("customAccentHex") private var customAccentHex: String = "#007AFF"
     @State private var showingTutorial = false
     @State private var showingContactsPicker = false
+    @State private var useSystemContactsPicker = false
     @State private var showingImportFromList = false
     @State private var importStartIntent: ImportSourceIntent? = nil
     @State private var showImportDialog = false
@@ -232,6 +234,7 @@ struct ContentView: View {
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @State private var isShowingShareSheet = false
     @State private var openedToast: String? = nil
+    // Paywall disabled
     @State private var showPaywall: Bool = false
     
     // Define unique colors for up to 12 people
@@ -428,25 +431,7 @@ struct ContentView: View {
                     }
                 }
         }
-        .sheet(isPresented: $showingHistory) {
-            HistoryView(
-                viewModel: viewModel,
-                dismissAction: { handleHistoryDismiss() }
-            )
-        }
-        .fullScreenCover(isPresented: $showPaywall) {
-            PaywallHost(isPresented: $showPaywall)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
-            if shouldSuppressPaywall() { return }
-            // Ensure we don't accidentally open Settings while paywall is up
-            AdsManager.shared.cancelPendingCompletion()
-            showingSettings = false
-            showPaywall = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .didUnlockPro)) { _ in
-            showPaywall = false
-        }
+        // Paywall disabled: remove any presentation and triggers
         .sheet(
             isPresented: Binding(
                 get: { importStartIntent != nil },
@@ -640,9 +625,8 @@ struct ContentView: View {
                 showingContactsPicker = false
             }
         }) {
-            ContactsPickerView(
-                contacts: viewModel.contacts,
-                onSelect: { selected in
+            if useSystemContactsPicker {
+                SystemContactsPicker { selected in
                     DispatchQueue.main.async {
                         for name in selected {
                             let allPeopleNames = viewModel.tableCollection.tables.values.flatMap { $0.people.map { $0.name.lowercased() } }
@@ -657,28 +641,48 @@ struct ContentView: View {
                         viewModel.suggestedNames = []
                         showingContactsPicker = false
                         viewModel.isLoadingContacts = false
-                        showingAddPerson = false // Dismiss add person view and return to main screen
-                        showEffortlessScreen = false // Always show main table after import
-                    }
-                },
-                onSmartSeating: { selected in
-                    DispatchQueue.main.async {
-                        viewModel.smartCreateTables(from: Array(selected))
-                        viewModel.suggestedNames = []
-                        showingContactsPicker = false
-                        viewModel.isLoadingContacts = false
                         showingAddPerson = false
                         showEffortlessScreen = false
                     }
                 }
-            )
+            } else {
+                ContactsPickerView(
+                    contacts: viewModel.contacts,
+                    onSelect: { selected in
+                        DispatchQueue.main.async {
+                            for name in selected {
+                                let allPeopleNames = viewModel.tableCollection.tables.values.flatMap { $0.people.map { $0.name.lowercased() } }
+                                let currentTableNames = viewModel.currentArrangement.people.map { $0.name.lowercased() }
+                                let allNames = Set(allPeopleNames + currentTableNames)
+                                if allNames.contains(name.lowercased()) {
+                                    print("Duplicate contact skipped: \(name)")
+                                } else {
+                                    viewModel.addPerson(name: name)
+                                }
+                            }
+                            viewModel.suggestedNames = []
+                            showingContactsPicker = false
+                            viewModel.isLoadingContacts = false
+                            showingAddPerson = false // Dismiss add person view and return to main screen
+                            showEffortlessScreen = false // Always show main table after import
+                        }
+                    },
+                    onSmartSeating: { selected in
+                        DispatchQueue.main.async {
+                            AdsManager.shared.showInterstitialThen {
+                                viewModel.smartCreateTables(from: Array(selected))
+                                viewModel.suggestedNames = []
+                                showingContactsPicker = false
+                                viewModel.isLoadingContacts = false
+                                showingAddPerson = false
+                                showEffortlessScreen = false
+                            }
+                        }
+                    }
+                )
+            }
         }
-        .sheet(isPresented: $showingHistory) {
-            HistoryView(
-                viewModel: viewModel,
-                dismissAction: { handleHistoryDismiss() }
-            )
-        }
+        // duplicate HistoryView sheet removed to prevent multiple-sheet conflicts
             // Removed automatic reset after sharing; preserving current table unless user taps Done
         // Add the delete person confirmation alert (place near other alerts in the view modifiers chain):
         .alert("Delete Person?", isPresented: $showingDeletePersonAlert) {
@@ -734,8 +738,8 @@ struct ContentView: View {
         } message: {
             Text("Seat Maker does not have access to your contacts. To enable access, go to Settings > Privacy > Contacts and turn on Contacts for Seat Maker.")
         }
-        // 3. Add .sheet(isPresented: $showContactsImportPrompt) { RequestContactsAccessView { _ in showContactsImportPrompt = false; showEffortlessScreen = false } } to ContentView's body.
-        .sheet(isPresented: $showContactsImportPrompt) { RequestContactsAccessView { _ in showContactsImportPrompt = false; showEffortlessScreen = false } }
+        // Keep a single ContactsAccess sheet; duplicates removed to avoid multi-sheet conflicts
+        // Duplicate ContactsAccess sheet removed elsewhere
     }
     
     // Extracted helper to reduce type-check complexity
@@ -785,8 +789,7 @@ struct ContentView: View {
         viewModel.showingQRCodeSheet = false
         importStartIntent = nil
         showingGuestManager = false
-        // Never open settings if the paywall is visible
-        if showPaywall { return }
+        // Paywall disabled
         
         // Defer presentation slightly to allow previous dismissals to settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -795,6 +798,45 @@ struct ContentView: View {
             }
         }
     }
+
+    // Paywall disabled: no-op stub retained for compatibility
+    private func dismissAllSheetsForPaywall() {
+        showingSettings = false
+        showingContactsPicker = false
+        isShowingShareSheet = false
+        showExportSheet = false
+        showingProfileEditor = false
+        showingHistory = false
+        showingAddPerson = false
+        showingImagePicker = false
+        showingTerms = false
+        viewModel.showingQRCodeSheet = false
+        importStartIntent = nil
+        showingGuestManager = false
+        showingPhotoPermissionRequest = false
+        showingTableManager = false
+        // Also close any misc. sheets in the marketing subviews (where locally scoped), via Notification if needed in future
+    }
+
+    // Returns true if any SwiftUI sheet or full screen cover is currently requested
+    private func isAnySheetOrCoverPresented() -> Bool {
+        return showingContactsPicker
+            || isShowingShareSheet
+            || showExportSheet
+            || showingProfileEditor
+            || showingHistory
+            || showingAddPerson
+            || showingImagePicker
+            || showingTerms
+            || viewModel.showingQRCodeSheet
+            || (importStartIntent != nil)
+            || showingGuestManager
+            || showingPhotoPermissionRequest
+            || showingTableManager
+    }
+
+    // Paywall disabled: no-op stub retained for compatibility
+    private func presentPaywallWhenNoSheetsAreShowing(retry: Int = 0) {}
     private var headerView: some View {
         VStack(spacing: 2) {
             if !viewModel.isViewingHistory {
@@ -823,9 +865,7 @@ struct ContentView: View {
                     } else if !showingTutorial && !showEffortlessScreen && !(viewModel.currentArrangement.people.isEmpty && viewModel.tableCollection.tables.isEmpty && viewModel.tableCollection.currentTableId == 0) && UserDefaults.standard.bool(forKey: "hasSeenTutorial") {
                         Button(action: {
                             triggerHaptic()
-                            AdsManager.shared.showInterstitialThen {
-                                openSettingsSafely()
-                            }
+                            openSettingsSafely()
                         }) {
                             Image(systemName: "gear")
                                 .font(.system(size: 28))
@@ -843,10 +883,8 @@ struct ContentView: View {
                         HStack(spacing: 4) {
                             Button(action: { DispatchQueue.main.async {
                                 triggerHaptic()
-                                AdsManager.shared.showInterstitialThen {
-                                    showingTableManager = true
-                                    OnboardingController.shared.advanceIfOn(anchor: .tableManager)
-                                }
+                                showingTableManager = true
+                                OnboardingController.shared.advanceIfOn(anchor: .tableManager)
                             } }) {
                                 Image(systemName: "rectangle.grid.2x2")
                                     .font(.system(size: 24))
@@ -1091,6 +1129,12 @@ struct ContentView: View {
                                     }
                                     showingProfileEditor = true
                                 }
+                            },
+                            onMovePerson: { person, destSeat in
+                                if let sourceSeat = viewModel.currentArrangement.seatAssignments[person.id] {
+                                    viewModel.movePerson(from: IndexSet(integer: sourceSeat), to: destSeat)
+                                    viewModel.saveCurrentTableState()
+                                }
                             }
                         )
                         .frame(maxWidth: 253, maxHeight: 211) // Keep these exact dimensions
@@ -1169,18 +1213,11 @@ struct ContentView: View {
                             tableShape: viewModel.currentArrangement.tableShape,
                             action: {
                                 // Block only if current is empty AND all future tables are empty
-                                let isAttemptingTable5OrBeyond = viewModel.tableCollection.currentTableId + 1 >= 4
-                                let lacksPro = !canUseUnlimitedFeatures()
-                                let shouldBlockForPro = isAttemptingTable5OrBeyond && lacksPro
-                                let shouldBlock = shouldBlockForPro || (viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables())
+                                let shouldBlock = (viewModel.currentArrangement.people.isEmpty && !viewModel.hasPeopleInFutureTables())
                                 if shouldBlock {
-                                    if shouldBlockForPro {
-                                        NotificationCenter.default.post(name: .showPaywall, object: nil)
-                                    } else {
-                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                                            withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
-                                        }
+                                    withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = true }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                        withAnimation(.easeInOut(duration: 0.18)) { showAddGuestsBreadcrumb = false }
                                     }
                                 } else {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1372,12 +1409,14 @@ struct ContentView: View {
 
             // Shuffle/History area at the bottom, themed background
             VStack(spacing: 12) {
-                Button(action: { 
+                Button(action: {
                     triggerHaptic(.medium)
-                    withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { 
-                        viewModel.shuffleSeats()
-                        // Trigger review prompt after positive action
-                        maybePromptForReview()
+                    AdsManager.shared.showInterstitialThen {
+                        withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) {
+                            viewModel.shuffleSeats()
+                            // Trigger review prompt after positive action
+                            maybePromptForReview()
+                        }
                     }
                 }) {
                     HStack(spacing: 10) {
@@ -1630,7 +1669,12 @@ struct ContentView: View {
     // Update the actionButtons to include the Export All Tables button
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            Button(action: { triggerHaptic(.medium); withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { viewModel.shuffleSeats() } }) {
+            Button(action: {
+                triggerHaptic(.medium)
+                AdsManager.shared.showInterstitialThen {
+                    withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.78, blendDuration: 0.2)) { viewModel.shuffleSeats() }
+                }
+            }) {
                 HStack {
                     Image(systemName: "dice.fill")
                     Text("SHUFFLE")
@@ -1700,11 +1744,6 @@ struct ContentView: View {
     
     // Add a method to export all tables
     private func exportAllTables() {
-        // Gate export behind Pro
-        if !canUseUnlimitedFeatures() {
-            showPaywall = true
-            return
-        }
         // Get comprehensive text for all tables
         let exportText = viewModel.exportAllTables()
         
@@ -1860,7 +1899,7 @@ struct ContentView: View {
                     .shadow(color: Color.accentColor.opacity(0.08), radius: 4, x: 0, y: 2)
                 Text("Create seating for events")
                     .font(.system(size: 16, weight: .regular)) // Changed from 18 to 16
-                    .foregroundColor(colorScheme == .dark ? Color.white : Color.black.opacity(0.9))
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                     .padding(.top, 0) // Move up by 3 pixels (was -3)
@@ -2027,11 +2066,17 @@ struct ContentView: View {
                 // Removed dropdown; handled directly in button action above
                 // Import from Contacts button (bottom)
                 Button(action: {
+                    // Avoid duplicate fetches
+                    if RevenueCatManager.shared.isPaywallActive { return }
+                    if viewModel.isFetchingContacts { return }
                     // Request contacts access *before* presenting the picker
                     CNContactStore().requestAccess(for: .contacts) { granted, error in
                         DispatchQueue.main.async {
                             if granted {
+                                // Prefer the system picker when available; fallback to custom list if needed
+                                useSystemContactsPicker = true
                                 showingContactsPicker = true
+                                // Also kick off background fetch to prime our cache for future quick picks
                                 Task { @MainActor in
                                     viewModel.fetchContacts()
                                 }
@@ -2575,38 +2620,7 @@ struct ContentView: View {
                         .accessibilityLabel("Take a tour")
                     }
                     // Upgrade CTA (moved above Appearance)
-                    if !RevenueCatManager.shared.state.unlimitedFeatures {
-                        Button(action: {
-                            NotificationCenter.default.post(name: .showPaywall, object: nil)
-                        }) {
-                            HStack(alignment: .center, spacing: 12) {
-                                ZStack {
-                                    Circle().fill(Color.accentColor.opacity(0.15)).frame(width: 38, height: 38)
-                                    Image(systemName: "crown.fill")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.accentColor)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Upgrade to Pro")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                    Text("Unlock all features and remove ads")
-                                        .font(.system(size: 13, weight: .regular))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                            // Transparent background; subtle divider only
-                            .background(Color.clear)
-                        }
-                        .accessibilityLabel("Upgrade to Pro — unlock all features")
-                    }
+                    // Upgrade CTA removed (paywall disabled)
 
                     // Appearance Section
                     Section(header: Text("Appearance")) {
@@ -3500,6 +3514,7 @@ struct ContentView: View {
         let arrangement: SeatingArrangement
         let getPersonColor: (UUID) -> Color
         let onPersonTap: (Person) -> Void
+        let onMovePerson: (Person, Int) -> Void
         
         private let positionCalculator = SeatPositionCalculator()
 
@@ -3536,6 +3551,19 @@ struct ContentView: View {
                                     position: position,
                                 onTap: { onPersonTap(person) }
                             )
+                            .gesture(
+                                DragGesture(minimumDistance: 10, coordinateSpace: .named("tableArea"))
+                                    .onEnded { value in
+                                        guard !person.isLocked else { return }
+                                        // Find nearest seat to drop point
+                                        let nearestIndex = seatPositions.enumerated()
+                                            .min(by: { hypot($0.element.x - value.location.x, $0.element.y - value.location.y) <
+                                                         hypot($1.element.x - value.location.x, $1.element.y - value.location.y) })?.offset
+                                        if let nearest = nearestIndex {
+                                            onMovePerson(person, nearest)
+                                        }
+                                    }
+                            )
                             .transition(.scale.combined(with: .opacity))
                             }
                         }
@@ -3546,6 +3574,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 15)
             }
+            .coordinateSpace(name: "tableArea")
         }
         
         private func tableShape(in geometry: GeometryProxy) -> some View {
@@ -3749,7 +3778,8 @@ struct ContentView: View {
             TableView(
                 arrangement: viewModel.currentArrangement,
                     getPersonColor: { id in getPersonColor(for: id, in: viewModel.currentArrangement) },
-                    onPersonTap: { _ in } // Empty handler as this is just an image
+                    onPersonTap: { _ in }, // Empty handler as this is just an image
+                    onMovePerson: { _, _ in }
                 )
                 .frame(width: 320, height: 280)
                 .padding(.horizontal)
@@ -4550,15 +4580,20 @@ struct ContentView: View {
                     }
                     
                     if filteredContacts.isEmpty {
-                        VStack {
-                            Spacer()
-                            Text("No contacts found")
-                                .foregroundColor(.secondary)
-                                .onAppear {
-                                    // Fire the same alert flow used when permission is denied
-                                    NotificationCenter.default.post(name: Notification.Name("ShowContactsDeniedAlert"), object: nil)
-                                }
-                            Spacer()
+                        if contacts.isEmpty {
+                            VStack {
+                                Spacer()
+                                Text("No contacts available. Check Settings > Privacy > Contacts for Seat Maker.")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                        } else {
+                            VStack {
+                                Spacer()
+                                Text("No matching contacts")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
                         }
                     } else {
                         List {
@@ -4629,6 +4664,46 @@ struct ContentView: View {
             }
             .accessibilityLabel("Select Contact")
             .accessibilityHint("Search for and select contacts to add to the table")
+        }
+    }
+
+    // MARK: - System Contacts picker (name-only)
+    struct SystemContactsPicker: UIViewControllerRepresentable {
+        var onSelect: ([String]) -> Void
+
+        func makeCoordinator() -> Coordinator { Coordinator(onSelect: onSelect) }
+
+        func makeUIViewController(context: Context) -> CNContactPickerViewController {
+            let picker = CNContactPickerViewController()
+            picker.delegate = context.coordinator
+            picker.predicateForEnablingContact = NSPredicate(value: true)
+            picker.displayedPropertyKeys = []
+            return picker
+        }
+
+        func updateUIViewController(_ uiViewController: CNContactPickerViewController, context: Context) {}
+
+        final class Coordinator: NSObject, CNContactPickerDelegate {
+            private let onSelect: ([String]) -> Void
+            init(onSelect: @escaping ([String]) -> Void) { self.onSelect = onSelect }
+
+            func contactPicker(_ picker: CNContactPickerViewController, didSelect contacts: [CNContact]) {
+                let names: [String] = contacts.map { c in
+                    let full = "\(c.givenName) \(c.familyName)".trimmingCharacters(in: .whitespacesAndNewlines)
+                    return full.isEmpty ? c.organizationName : full
+                }.filter { !$0.isEmpty }
+                onSelect(names)
+            }
+
+            func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+                let full = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = full.isEmpty ? contact.organizationName : full
+                onSelect(name.isEmpty ? [] : [name])
+            }
+
+            func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+                onSelect([])
+            }
         }
     }
     
@@ -5447,36 +5522,16 @@ struct TermsView: View {
     
     // Function to share as text - with improved format for tables
     private func shareText() {
-        // Gate share/export behind Pro
-        if !canUseUnlimitedFeatures() {
-            showPaywall = true
-            return
-        }
         viewModel.saveCurrentTableState()
         let exportText = viewModel.exportAllTables()
         AdsManager.shared.showInterstitialThen {
-            let activityVC = UIActivityViewController(
-                activityItems: [exportText],
-                applicationActivities: nil
-            )
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootVC = windowScene.windows.first?.rootViewController {
-                rootVC.present(activityVC, animated: true) {
-                    // After share sheet is dismissed, return to welcome
-                    DispatchQueue.main.async {
-                        resetAndShowWelcomeScreen()
-                    }
-                }
-            }
+            // Use the unified SwiftUI sheet to present the ActivityView
+            exportItems = [exportText]
+            isShowingShareSheet = true
         }
     }
     // Function to share as image
     private func shareImage() {
-        // Gate image export behind Pro
-        if !canUseUnlimitedFeatures() {
-            showPaywall = true
-            return
-        }
         let (formattedTitle, eventEmoji) = UIHelpers.formatEventTitle(viewModel.currentArrangement.title)
         let renderer = ImageRenderer(content:
             VStack(spacing: 12) {
@@ -5519,7 +5574,8 @@ struct TermsView: View {
                 TableView(
                     arrangement: viewModel.currentArrangement,
                     getPersonColor: { id in getPersonColor(for: id, in: viewModel.currentArrangement) },
-                    onPersonTap: { _ in } // Empty handler as this is just an image
+                    onPersonTap: { _ in }, // Empty handler as this is just an image
+                    onMovePerson: { _, _ in }
                 )
                 .frame(width: 320, height: 280)
                 .padding(.horizontal)
@@ -5578,18 +5634,9 @@ struct TermsView: View {
             .padding(16)
         )
         if let uiImage = renderer.uiImage {
-            let activityVC = UIActivityViewController(
-                activityItems: [uiImage],
-                applicationActivities: nil
-            )
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootVC = windowScene.windows.first?.rootViewController {
-                rootVC.present(activityVC, animated: true) {
-                    DispatchQueue.main.async {
-                        resetAndShowWelcomeScreen()
-                    }
-                }
-            }
+            // Use the unified SwiftUI sheet to present the ActivityView
+            exportItems = [uiImage]
+            isShowingShareSheet = true
         }
     }
 
@@ -5626,7 +5673,8 @@ struct TermsView: View {
             TableView(
                 arrangement: viewModel.currentArrangement,
                 getPersonColor: { id in getPersonColor(for: id, in: viewModel.currentArrangement) },
-                onPersonTap: { _ in }
+                onPersonTap: { _ in },
+                onMovePerson: { _, _ in }
             )
             .frame(width: 360, height: 300)
             .padding(.top, 4)
@@ -6667,10 +6715,26 @@ struct AllTablesExportView: View {
     }
 
     private func presentActivity(items: [Any]) {
-        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
+        presentShareSheetSafely(items: items)
+    }
+
+    private func presentShareSheetSafely(items: [Any]) {
+        // If a sheet is already up, dismiss it first, then present the share sheet a beat later.
+        if isShowingShareSheet {
+            isShowingShareSheet = false
+        }
+        // Delay to allow any prior sheet to dismiss (e.g., Export sheet or QR sheet)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootVC = windowScene.windows.first?.rootViewController {
+                // On iPad, ensure a popover anchor is set to avoid crashes
+                if let pop = activityVC.popoverPresentationController {
+                    pop.sourceView = rootVC.view
+                    pop.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 1, height: 1)
+                }
+                rootVC.present(activityVC, animated: true)
+            }
         }
     }
 
@@ -8358,12 +8422,7 @@ struct TableManagerView: View {
     }
 
     private func createNewTableAndOpen() {
-        // Gate creating additional tables behind Pro if more than 4 exists
-        let existingCount = viewModel.tableCollection.tables.count
-        if existingCount >= 4 && !canUseUnlimitedFeatures() {
-            NotificationCenter.default.post(name: .showPaywall, object: nil)
-            return
-        }
+        // Paywall disabled: allow creating additional tables
         let id = viewModel.createAndSwitchToNewTable()
         showTransientToast("Opened Table \(id + 1)")
         onOpenTable?(id)
@@ -8441,7 +8500,8 @@ private struct TableCard: View {
                     getPersonColor: { id in
                         arrangement.people.first(where: { $0.id == id })?.color ?? .blue
                     },
-                    onPersonTap: { _ in }
+                    onPersonTap: { _ in },
+                    onMovePerson: { _, _ in }
                 )
                 .scaleEffect(0.76)
                 .frame(height: 125)

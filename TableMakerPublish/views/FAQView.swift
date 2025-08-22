@@ -4,6 +4,7 @@ struct FAQScreenView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isAnimating = false
     @State private var selectedSection: String? = nil
+    // Paywall disabled
     @State private var showPaywall = false
     
     var body: some View {
@@ -88,17 +89,7 @@ struct FAQScreenView: View {
                 isAnimating = true
             }
         }
-        .fullScreenCover(isPresented: $showPaywall) {
-            PaywallHost(isPresented: $showPaywall)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in
-            if shouldSuppressPaywall() { return }
-            AdsManager.shared.cancelPendingCompletion()
-            showPaywall = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .didUnlockPro)) { _ in
-            showPaywall = false
-        }
+        // Paywall disabled
     }
     
     private var headerSection: some View {

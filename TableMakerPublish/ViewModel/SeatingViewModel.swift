@@ -72,7 +72,7 @@ class SeatingViewModel: ObservableObject {
     private var contactsCache: [String]?
     private var lastContactsFetch: Date?
     private let contactsCacheTimeout: TimeInterval = 300 // 5 minutes
-    private var isFetchingContacts = false // Add flag to prevent multiple simultaneous fetches
+    var isFetchingContacts = false // Add flag to prevent multiple simultaneous fetches
     private var contactsFetchTask: Task<Void, Never>? // Add task reference for cancellation
     
     init() {
@@ -142,7 +142,7 @@ class SeatingViewModel: ObservableObject {
             nextId += 1
         }
 
-        // Append imported tables after the existing ones. Non‑Pro limited to 4 total tables.
+        // Append imported tables after the existing ones. Paywall disabled: no cap on total tables.
         for (index, peopleNames) in assignments.enumerated() {
             guard !peopleNames.isEmpty else { continue }
             let shape = shapes.isEmpty ? defaultTableShape : shapes[index % max(shapes.count, 1)]
@@ -162,14 +162,8 @@ class SeatingViewModel: ObservableObject {
                 arrangement.seatAssignments[person.id] = seatIndex
                 seatIndex += 1
             }
-            // Enforce table count cap for non‑Pro
-            if !canUseUnlimitedFeatures() && rebuilt.count >= 4 {
-                NotificationCenter.default.post(name: .showPaywall, object: nil)
-                break
-            } else {
-                rebuilt[nextId] = arrangement
-                nextId += 1
-            }
+            rebuilt[nextId] = arrangement
+            nextId += 1
         }
 
         tableCollection.tables = rebuilt
@@ -370,17 +364,14 @@ class SeatingViewModel: ObservableObject {
             return
         }
         
-        // Enforce non‑Pro cap at 10 per table; Pro users can go to 20
-        let hardCap = canUseUnlimitedFeatures() ? 20 : 10
+        // Paywall disabled: allow up to 20 per table always
+        let hardCap = 20
         if currentArrangement.people.count >= hardCap {
             NotificationCenter.default.post(
                 name: Notification.Name("ShowMaxPeopleAlert"),
                 object: nil,
-                userInfo: ["message": hardCap == 10 ? "Upgrade to add more than 10 people per table" : "Maximum of 20 people per table reached"]
+                userInfo: ["message": "Maximum of \(hardCap) people per table reached"]
             )
-            if !canUseUnlimitedFeatures() {
-                NotificationCenter.default.post(name: .showPaywall, object: nil)
-            }
             return
         }
         
@@ -649,6 +640,12 @@ class SeatingViewModel: ObservableObject {
             }
         }
     }
+
+    // Convenience: move by person id to a seat index
+    func movePerson(_ personId: UUID, toSeat destination: Int) {
+        guard let currentIndex = currentArrangement.seatAssignments[personId] else { return }
+        movePerson(from: IndexSet(integer: currentIndex), to: destination)
+    }
     
     func deleteAllHistory() {
         // Clear all arrangements and tables
@@ -767,8 +764,18 @@ class SeatingViewModel: ObservableObject {
                 !arrangement.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                 !arrangement.people.isEmpty
             }
+            // Strip large image payloads before persisting to UserDefaults (4MB per-key limit)
+            let sanitizedArrangements: [SeatingArrangement] = validArrangements.map { arrangement in
+                var copy = arrangement
+                copy.people = arrangement.people.map { person in
+                    var p = person
+                    p.profileImageData = nil
+                    return p
+                }
+                return copy
+            }
             
-            let encoded = try JSONEncoder().encode(validArrangements)
+            let encoded = try JSONEncoder().encode(sanitizedArrangements)
             userDefaults.set(encoded, forKey: arrangementsKey)
         } catch {
             print("Error saving arrangements: \(error.localizedDescription)")
@@ -933,12 +940,7 @@ class SeatingViewModel: ObservableObject {
             return
         }
         
-        // Enforce Pro requirement: block navigating to Table 5 (id 4) or beyond unless user has Pro
-        if direction == .right, nextTableId >= 4, !canUseUnlimitedFeatures() {
-            // Surface paywall and do not create new tables past the free cap
-            NotificationCenter.default.post(name: .showPaywall, object: nil)
-            return
-        }
+        // Paywall disabled: allow navigating/creating beyond any cap
 
         // Load or create the next table
         if let existingTable = tableCollection.tables[nextTableId] {
@@ -1003,7 +1005,18 @@ class SeatingViewModel: ObservableObject {
                 tableCollection.tables[tableCollection.currentTableId] = currentTable
             }
             
-            let encoded = try JSONEncoder().encode(tableCollection)
+            // Strip large image payloads before persisting to UserDefaults (4MB per-key limit)
+            var sanitized = tableCollection
+            sanitized.tables = sanitized.tables.mapValues { table in
+                var t = table
+                t.people = table.people.map { person in
+                    var p = person
+                    p.profileImageData = nil
+                    return p
+                }
+                return t
+            }
+            let encoded = try JSONEncoder().encode(sanitized)
             tableCollectionData = encoded
             
             // Notify observers of the change
@@ -1321,11 +1334,8 @@ class SeatingViewModel: ObservableObject {
         }
         let shapes: [TableShape] = assignments.map { shape(for: $0.count) }
 
-        // Create new tables appended after existing ones and persist, show interstitial first
-        AdsManager.shared.showInterstitialThen { [weak self] in
-            guard let self = self else { return }
-            self.createTablesFromImported(assignments: assignments, shapes: shapes, eventTitle: self.currentArrangement.eventTitle)
-        }
+        // Create new tables appended after existing ones and persist. Interstitial is handled at caller UI level.
+        createTablesFromImported(assignments: assignments, shapes: shapes, eventTitle: self.currentArrangement.eventTitle)
     }
 
     // Add this method to allow changing the app icon
@@ -1378,11 +1388,7 @@ class SeatingViewModel: ObservableObject {
     /// Create a new blank table at the next available id and switch to it. Returns the new table id.
     @discardableResult
     func createAndSwitchToNewTable() -> Int {
-        // Global guard: Non‑Pro limited to 4 tables
-        if !canUseUnlimitedFeatures() && tableCollection.tables.count >= 4 {
-            NotificationCenter.default.post(name: .showPaywall, object: nil)
-            return tableCollection.currentTableId
-        }
+        // Paywall disabled: no cap on number of tables
         saveCurrentTableState()
         let nextId: Int
         if tableCollection.tables.isEmpty {
@@ -1412,11 +1418,7 @@ class SeatingViewModel: ObservableObject {
     /// Duplicate an existing table id, create a new id, and return the new id.
     @discardableResult
     func duplicateTable(id: Int) -> Int? {
-        // Global guard: Non‑Pro limited to 4 tables
-        if !canUseUnlimitedFeatures() && tableCollection.tables.count >= 4 {
-            NotificationCenter.default.post(name: .showPaywall, object: nil)
-            return nil
-        }
+        // Paywall disabled: no cap on number of tables
         guard let existing = tableCollection.tables[id] else { return nil }
         saveCurrentTableState()
         let nextId = (tableCollection.tables.keys.max() ?? -1) + 1

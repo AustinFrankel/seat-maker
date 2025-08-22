@@ -31,6 +31,7 @@
 		503BAD7B99B6A7C36E5E7DB2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE990E3CBFB57B48EF41C2FD /* NotificationService.swift */; };
 		507F7C5F0FF38CDE94563B79 /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = D43334D1D6C369C3C8DB0129 /* ReceiptParser */; };
 		5258A7A30703E853C6517D40 /* TableMakerPublishUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 902999B9B16885096F3A5C98 /* TableMakerPublishUITests.swift */; };
+		583195B6EB3686D402F900DB /* Pods_TableMakerPublish.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7412A33321576F4E9EEFF9E0 /* Pods_TableMakerPublish.framework */; };
 		5E639F2C02B580BDD820D48B /* LaunchAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD524F7CF3FCA66CDE8968B /* LaunchAnimationView.swift */; };
 		6034A9C00F3E4E72C70B8AD8 /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69F78B9AAA7BA5654A4EFFE /* TutorialView.swift */; };
 		72EC50E5A1C1EF96BD098D0E /* TableSharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CAFE6A5A4CF899E2A353D0 /* TableSharingService.swift */; };
@@ -91,6 +92,7 @@
 		08FC102067C5B9E022D6D10D /* ContactsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsManager.swift; sourceTree = "<group>"; };
 		0DD524F7CF3FCA66CDE8968B /* LaunchAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationView.swift; sourceTree = "<group>"; };
 		1076508C109B1D3F6639C05D /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
+		10D0C3CD8EA40B2A671F730E /* Pods-TableMakerPublish.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TableMakerPublish.release.xcconfig"; path = "Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish.release.xcconfig"; sourceTree = "<group>"; };
 		11DBEC9A859C8E79BF9CD2C6 /* TableMakerPublish.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TableMakerPublish.entitlements; sourceTree = "<group>"; };
 		129B5B3544103DE4B6A80FCD /* PaywallHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallHost.swift; sourceTree = "<group>"; };
 		1486B32E4BDA11C6FC1E7968 /* AddPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPersonView.swift; sourceTree = "<group>"; };
@@ -109,7 +111,9 @@
 		58A9EA4BE27385E5C8DC53E4 /* SnapshotImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotImporter.swift; sourceTree = "<group>"; };
 		5CB9B01815447D960403752E /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		609D897F688F23EA187824C2 /* TableMakerPublishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableMakerPublishTests.swift; sourceTree = "<group>"; };
+		7412A33321576F4E9EEFF9E0 /* Pods_TableMakerPublish.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_TableMakerPublish.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		787200C8C43E74CCCB9BA19F /* SharedTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTypes.swift; sourceTree = "<group>"; };
+		7CA7C218099658C5D9B813AF /* Pods-TableMakerPublish.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TableMakerPublish.debug.xcconfig"; path = "Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish.debug.xcconfig"; sourceTree = "<group>"; };
 		813264B607DE848506E62BA6 /* PolarPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolarPosition.swift; sourceTree = "<group>"; };
 		85673682980D8BF82861C0F7 /* HelpTutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpTutorialView.swift; sourceTree = "<group>"; };
 		8CA29B0E21BF79EC7B727267 /* ShareLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLayoutCoordinator.swift; sourceTree = "<group>"; };
@@ -153,12 +157,23 @@
 				F5963BD1ECE37D0D6535B904 /* RevenueCat in Frameworks */,
 				838BB2077D09B1E471E88A3B /* RevenueCatUI in Frameworks */,
 				507F7C5F0FF38CDE94563B79 /* ReceiptParser in Frameworks */,
+				583195B6EB3686D402F900DB /* Pods_TableMakerPublish.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		28E76C9B86DD8600F14CBCA5 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				7CA7C218099658C5D9B813AF /* Pods-TableMakerPublish.debug.xcconfig */,
+				10D0C3CD8EA40B2A671F730E /* Pods-TableMakerPublish.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		2C50EB7601640602E5E37613 /* TableMakerPublishTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -217,6 +232,8 @@
 				2C50EB7601640602E5E37613 /* TableMakerPublishTests */,
 				452F7D3990E2AE2AF57BBCA3 /* TableMakerPublishUITests */,
 				84C63A094C5F66323CF45CDB /* Products */,
+				28E76C9B86DD8600F14CBCA5 /* Pods */,
+				94241692EB91A55368A0B243 /* Frameworks */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -253,6 +270,14 @@
 				D491BD389ACA4D7516EA7B4B /* TableMakerPublishUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		94241692EB91A55368A0B243 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7412A33321576F4E9EEFF9E0 /* Pods_TableMakerPublish.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		A64D95CF313AA59C590079A8 /* ViewModel */ = {
@@ -329,8 +354,6 @@
 				1948B3A07413D2F9C0CCB6E3 /* PBXTargetDependency */,
 			);
 			name = TableMakerPublishUITests;
-			packageProductDependencies = (
-			);
 			productName = TableMakerPublishUITests;
 			productReference = D491BD389ACA4D7516EA7B4B /* TableMakerPublishUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -339,9 +362,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2D5858F81E46F60519281D23 /* Build configuration list for PBXNativeTarget "TableMakerPublish" */;
 			buildPhases = (
+				A7DE55654B5FE485FCE9AB41 /* [CP] Check Pods Manifest.lock */,
 				734460A2D3A20D8E04251406 /* Sources */,
 				84991E93F646FDB25F11B492 /* Resources */,
 				6E123E462DC970C61197A048 /* Frameworks */,
+				81B975B17424FF91F81EBBFC /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -369,8 +394,6 @@
 				4E3994EAC19760AB51A8D357 /* PBXTargetDependency */,
 			);
 			name = TableMakerPublishTests;
-			packageProductDependencies = (
-			);
 			productName = TableMakerPublishTests;
 			productReference = 198B013B23428455A5EDCBC4 /* TableMakerPublishTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -411,6 +434,7 @@
 			packageReferences = (
 				A18DF6D51C2CD5E5584BF2CE /* XCRemoteSwiftPackageReference "purchases-ios" */,
 			);
+			productRefGroup = 84C63A094C5F66323CF45CDB /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -433,6 +457,48 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		81B975B17424FF91F81EBBFC /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-TableMakerPublish/Pods-TableMakerPublish-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A7DE55654B5FE485FCE9AB41 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-TableMakerPublish-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		2D42FA300F71D95574A07A54 /* Sources */ = {
@@ -525,13 +591,18 @@
 /* Begin XCBuildConfiguration section */
 		00126DED51AFC8FDC5C817B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7CA7C218099658C5D9B813AF /* Pods-TableMakerPublish.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = K7W4GTNGWC;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = TableMakerPublish/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Seat Maker";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -545,13 +616,18 @@
 		};
 		36E4C3D310D8A3516A0F460D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 10D0C3CD8EA40B2A671F730E /* Pods-TableMakerPublish.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = K7W4GTNGWC;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = TableMakerPublish/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Seat Maker";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -567,6 +643,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -584,6 +661,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -633,7 +711,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -654,7 +732,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -672,6 +750,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -689,6 +768,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -738,7 +818,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 5RRK3UWHRU;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -753,7 +833,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
