@@ -27,8 +27,8 @@ export default function MiniDemo() {
     window.addEventListener('mouseup', onUp);
     window.addEventListener('touchend', onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove as any);
-      window.removeEventListener('touchmove', onMove as any);
+      window.removeEventListener('mousemove', onMove as EventListener);
+      window.removeEventListener('touchmove', onMove as EventListener);
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('touchend', onUp);
     };

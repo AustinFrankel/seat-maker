@@ -29,8 +29,8 @@ export function Footer() {
         <nav aria-label="Footer Product">
           <div className="font-medium mb-2">Product</div>
           <ul className="space-y-2 text-muted-foreground">
-            <li><a className="hover:underline" href="/#features">Features</a></li>
-            <li><a className="hover:underline" href="/#how-it-works">How It Works</a></li>
+            <li><Link className="hover:underline" href="/#features">Features</Link></li>
+            <li><Link className="hover:underline" href="/#how-it-works">How It Works</Link></li>
             <li><Link className="hover:underline" href="/download">Download</Link></li>
           </ul>
         </nav>

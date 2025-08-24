@@ -1,9 +1,9 @@
 import Image from "next/image";
-import Img24 from "../../../images/Untitled design (24).png";
-import Img25 from "../../../images/Untitled design (25).png";
-import Img26 from "../../../images/Untitled design (26).png";
-import Img27 from "../../../images/Untitled design (27).png";
-import Img28 from "../../../images/Untitled design (28).png";
+import Img24 from "../../../images/design-24.png";
+import Img25 from "../../../images/design-25.png";
+import Img26 from "../../../images/design-26.png";
+import Img27 from "../../../images/design-27.png";
+import Img28 from "../../../images/design-28.png";
 
 export function DesignStrip() {
   const items = [
