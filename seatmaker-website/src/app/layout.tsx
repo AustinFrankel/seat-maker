@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import { PageTransition } from "@/components/site/PageTransition";
+import { StickyDownloadBar } from "@/components/site/StickyDownloadBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,18 +22,27 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.seatmakerapp.co
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Seat Maker v1.2 — Fast, Offline Seating Charts",
+    default: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
     template: "%s · Seat Maker",
   },
   description:
-    "Design table layouts and drag guests into seats in seconds. Offline-ready, no login, share via QR. Download now on the App Store.",
+    "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
+  keywords: [
+    "seating chart app",
+    "wedding seating",
+    "event planning",
+    "drag and drop",
+    "table layout",
+    "iPhone",
+    "iPad",
+  ],
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: siteUrl,
-    title: "Seat Maker v1.2 — Fast, Offline Seating Charts",
+    title: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
     description:
-      "Design table layouts and drag guests into seats in seconds. Offline-ready, no login, share via QR. Download now on the App Store.",
+      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
     images: [
       {
         url: "/og.png",
@@ -43,9 +54,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Seat Maker v1.2 — Fast, Offline Seating Charts",
+    title: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
     description:
-      "Design table layouts and drag guests into seats in seconds. Offline-ready, no login, share via QR. Download now on the App Store.",
+      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
     images: ["/og.png"],
   },
   robots: { index: true, follow: true },
@@ -72,8 +83,28 @@ export default function RootLayout({
     url: siteUrl,
   };
 
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Seat Maker",
+    url: siteUrl,
+    sameAs: ["https://www.instagram.com/seatmakerapp"],
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Product", item: `${siteUrl}/` },
+      { "@type": "ListItem", position: 2, name: "FAQ", item: `${siteUrl}/faq` },
+      { "@type": "ListItem", position: 3, name: "About", item: `${siteUrl}/about` },
+      { "@type": "ListItem", position: 4, name: "Privacy", item: `${siteUrl}/privacy` },
+      { "@type": "ListItem", position: 5, name: "Download", item: `${siteUrl}/download` },
+    ],
+  };
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="scroll-smooth">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 z-50 rounded bg-secondary px-3 py-2">
           Skip to content
@@ -81,13 +112,24 @@ export default function RootLayout({
         <ThemeProvider>
           <Header />
           <main id="main" className="min-h-[70vh]">
-            {children}
+            <PageTransition>
+              {children}
+            </PageTransition>
           </main>
           <Footer />
+          {/* Removed sticky download bar per request */}
         </ThemeProvider>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
       </body>
     </html>

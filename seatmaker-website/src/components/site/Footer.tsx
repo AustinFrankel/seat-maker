@@ -26,22 +26,22 @@ export function Footer() {
             </Link>
           </div>
         </div>
-        <nav aria-label="Footer">
+        <nav aria-label="Footer Product">
           <div className="font-medium mb-2">Product</div>
           <ul className="space-y-2 text-muted-foreground">
-            <li><Link className="hover:underline" href="/">Home</Link></li>
-            <li><Link className="hover:underline" href="/key-features">Key Features</Link></li>
-            <li><Link className="hover:underline" href="/how-it-works">How It Works</Link></li>
+            <li><a className="hover:underline" href="/#features">Features</a></li>
+            <li><a className="hover:underline" href="/#how-it-works">How It Works</a></li>
             <li><Link className="hover:underline" href="/download">Download</Link></li>
           </ul>
         </nav>
-        <nav>
+        <nav aria-label="Footer Company">
           <div className="font-medium mb-2">Company</div>
           <ul className="space-y-2 text-muted-foreground">
             <li><Link className="hover:underline" href="/about">About</Link></li>
+            <li><Link className="hover:underline" href="/about#press">Press</Link></li>
           </ul>
         </nav>
-        <nav>
+        <nav aria-label="Footer Legal">
           <div className="font-medium mb-2">Legal</div>
           <ul className="space-y-2 text-muted-foreground">
             <li><Link className="hover:underline" href="/privacy">Privacy Policy</Link></li>
@@ -49,7 +49,7 @@ export function Footer() {
         </nav>
       </div>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-8 text-muted-foreground">
-        <div>© {new Date().getFullYear()} Seat Maker. All rights reserved.</div>
+        <div>© {new Date().getFullYear()} Seat Maker · v1.2</div>
         <div className="flex gap-4">
           <Link className="hover:underline" href="mailto:tablemakercontact@gmail.com">
             Contact

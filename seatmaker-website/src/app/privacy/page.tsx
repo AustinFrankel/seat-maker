@@ -10,6 +10,14 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-10 md:py-16">
       <h1 className="text-3xl font-semibold tracking-tight mb-6">Privacy Policy</h1>
+      <div className="rounded-xl border p-4 mb-6">
+        <div className="font-medium">Summary</div>
+        <ul className="text-sm text-muted-foreground list-disc pl-5 mt-2">
+          <li>No tracking or ads</li>
+          <li>No account required</li>
+          <li>Optional iCloud sync</li>
+        </ul>
+      </div>
       <div className="text-sm text-muted-foreground space-y-6">
         <p className="text-base font-medium">Last updated: May 31, 2025</p>
         

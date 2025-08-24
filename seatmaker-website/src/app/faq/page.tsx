@@ -7,5 +7,27 @@ export const metadata: Metadata = {
 };
 
 export default function FAQPage() {
-  return <FAQClient />;
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Is Seat Maker free?",
+        acceptedAnswer: { "@type": "Answer", text: "Yes, Seat Maker is free to download and use." },
+      },
+      {
+        "@type": "Question",
+        name: "Does it work offline?",
+        acceptedAnswer: { "@type": "Answer", text: "Yes. Your data stays on device or iCloud if enabled." },
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <FAQClient />
+    </>
+  );
 }

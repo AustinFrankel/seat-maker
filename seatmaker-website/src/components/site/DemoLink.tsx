@@ -14,6 +14,9 @@ export function DemoLink() {
       "/seatvid.mp4",
       "/seatvid.mov",
       "/seatvid.webm",
+      // allow capitalized or alternate folder placements
+      "/images/SeatVid.mp4",
+      "/seatmaker-website/images/seatvid.mp4",
     ];
     (async () => {
       for (const candidate of candidates) {
@@ -42,7 +45,7 @@ export function DemoLink() {
       target="_blank"
       rel="noopener noreferrer"
     >
-      Watch 45-sec demo
+      Watch 30-sec demo
     </a>
   );
 }

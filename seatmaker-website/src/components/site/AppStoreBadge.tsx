@@ -30,8 +30,9 @@ export function AppStoreBadge({ className = "" }: { className?: string }) {
   const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL || "https://apps.apple.com/us/app/seat-maker/id6748284141";
   
   // Determine which theme is actually active
-  const currentTheme = resolvedTheme || theme || 'light';
-  const isDark = currentTheme === 'dark';
+  // Avoid SSR/CSR mismatch by not branching on theme until mounted
+  const mounted = typeof window !== 'undefined' && document.documentElement.classList.contains('dark');
+  const isDark = mounted;
   
   function trackClick() {
     if (process.env.NEXT_PUBLIC_ENABLE_TRACKING === "true") {
@@ -45,24 +46,14 @@ export function AppStoreBadge({ className = "" }: { className?: string }) {
       href={appStoreUrl}
       prefetch={false}
       onClick={trackClick}
-      className={`
-        inline-flex items-center rounded-xl px-4 py-3 
-        transition-all duration-200 ease-in-out
-        hover:scale-[1.02] focus-visible:outline-none 
-        focus-visible:ring-2 focus-visible:ring-offset-2
-        ${isDark 
-          ? 'bg-white text-black hover:bg-gray-100 focus-visible:ring-white' 
-          : 'bg-black text-white hover:bg-gray-900 focus-visible:ring-black'
-        }
-        ${className}
-      `}
+      className={`inline-flex items-center rounded-xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${className}`}
       aria-label="Download on the App Store"
     >
-      {isDark ? (
-        <AppleIconDark className="w-6 h-6 mr-3 flex-shrink-0" />
-      ) : (
-        <AppleIconLight className="w-6 h-6 mr-3 flex-shrink-0" />
-      )}
+      {/* Render both icons stacked to avoid hydration differences; show via CSS */}
+      <span className="relative mr-3 inline-flex">
+        <AppleIconLight className="w-6 h-6 flex-shrink-0 dark:hidden" />
+        <AppleIconDark className="w-6 h-6 flex-shrink-0 hidden dark:inline" />
+      </span>
       <div className="flex flex-col items-start">
         <span className="text-xs leading-tight font-medium">Download on the</span>
         <span className="text-sm font-semibold leading-tight">App Store</span>
