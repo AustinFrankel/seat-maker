@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { DemoLink } from "@/components/site/DemoLink";
 import ContactSection from "@/components/site/ContactSection";
 import { DesignStrip } from "@/components/site/DesignStrip";
+import { Gallery } from "@/components/site/Gallery";
 // Use public asset path to avoid bundler issues; ensure file exists under public/images
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export default function HomePage() {
       { iconColor: "text-blue-600", title: "Shuffle & Lock VIPs", desc: "Explore options while keeping key seats fixed.", href: "#how-it-works" },
       { iconColor: "text-blue-600", title: "Share as Message & Image", desc: "Send via Messages or save/export an image.", href: "#how-it-works" },
       { iconColor: "text-blue-600", title: "Offline & Private", desc: "Your data stays on device or iCloud if enabled.", href: "#how-it-works" },
+      { iconColor: "text-blue-600", title: "Settings", desc: "Customize app settings and preferences.", href: "#how-it-works" },
+      { iconColor: "text-blue-600", title: "Edit Profiles", desc: "Easily manage and edit guest profiles.", href: "#how-it-works" },
+      { iconColor: "text-blue-600", title: "Table Manager", desc: "Effortlessly manage and organize seating tables.", href: "#how-it-works" },
     ],
     []
   );
@@ -49,15 +53,15 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span aria-label="Rating five stars">★★★★★</span>
-                <span>4.9/5 from 250+ ratings</span>
+                <span>4.7/5 — 100k views</span>
               </div>
             </div>
             <div className="relative">
               <Image
                 src="/images/topImageSeatMaker.png"
                 alt="Seat Maker app preview"
-                width={480}
-                height={960}
+                width={420}
+                height={840}
                 className="mx-auto"
                 priority
               />
@@ -93,6 +97,15 @@ export default function HomePage() {
                     {idx === 5 && (/* Offline */
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 2l20 20"/></svg>
                     )}
+                    {idx === 6 && (/* Settings */
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V22a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0A1.65 1.65 0 0 0 21 12h.09a2 2 0 1 1 0 4H21a1.65 1.65 0 0 0-1.6-.99Z"/></svg>
+                    )}
+                    {idx === 7 && (/* Edit profiles */
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    )}
+                    {idx === 8 && (/* Table manager */
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    )}
                   </span>
                   <span className="sr-only">{f.title}</span>
                 </div>
@@ -109,20 +122,7 @@ export default function HomePage() {
       <section aria-labelledby="gallery-heading" className="py-20 [perspective:1000px]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 id="gallery-heading" className="text-3xl font-semibold tracking-tight text-center mb-10">See Seat Maker in Action</h2>
-          <div className="overflow-x-auto snap-x snap-mandatory flex gap-6 pb-4" aria-label="App gallery" role="region">
-            {[
-              {i:1, caption:"Drag guests into any seat"},
-              {i:2, caption:"Build custom round, square, or rectangle tables"},
-              {i:3, caption:"Shuffle results to explore options"},
-              {i:4, caption:"Lock VIPs before shuffling"},
-              {i:5, caption:"Share as message or image"},
-            ].map(({i, caption}) => (
-              <figure key={i} className="min-w-[280px] sm:min-w-[360px] snap-start will-change-transform hover:[transform:rotateX(6deg)_translateY(-2px)] transition-transform">
-                <Image src={`/images/seat${i}.png`} alt={`Seat Maker seating chart UI ${i}`} width={360} height={640} className="rounded-xl shadow-lg" />
-                <figcaption className="mt-2 text-sm text-muted-foreground">{caption}</figcaption>
-              </figure>
-            ))}
-          </div>
+          <Gallery />
         </div>
       </section>
 
