@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Moon, Sun, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { AppStoreBadge } from "@/components/site/AppStoreBadge";
@@ -100,10 +99,10 @@ export function Header() {
                 className="relative transition-transform duration-300 hover:rotate-12 active:translate-y-0"
               >
                 {mounted && (
-                  <div className="transition-all duration-300 will-change-transform">
-                    <Sun className="size-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
-                    <Moon className="size-5 absolute rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
-                  </div>
+                  <span className="relative inline-block w-5 h-5">
+                    <Sun className="absolute inset-0 m-auto size-5 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
+                    <Moon className="absolute inset-0 m-auto size-5 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
+                  </span>
                 )}
                 <span className="sr-only">Toggle theme</span>
               </Button>

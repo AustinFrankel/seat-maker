@@ -4,8 +4,6 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
-import { PageTransition } from "@/components/site/PageTransition";
-import { StickyDownloadBar } from "@/components/site/StickyDownloadBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,7 +24,7 @@ export const metadata: Metadata = {
     template: "%s · Seat Maker",
   },
   description:
-    "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
+    "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share as message or image. Works offline, no account required.",
   keywords: [
     "seating chart app",
     "wedding seating",
@@ -42,7 +40,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
     description:
-      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
+      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share as message or image. Works offline, no account required.",
     images: [
       {
         url: "/og.png",
@@ -56,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
     description:
-      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
+      "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share as message or image. Works offline, no account required.",
     images: ["/og.png"],
   },
   robots: { index: true, follow: true },
@@ -112,12 +110,9 @@ export default function RootLayout({
         <ThemeProvider>
           <Header />
           <main id="main" className="min-h-[70vh]">
-            <PageTransition>
-              {children}
-            </PageTransition>
+            {children}
           </main>
           <Footer />
-          {/* Removed sticky download bar per request */}
         </ThemeProvider>
         <script
           type="application/ld+json"

@@ -11,7 +11,7 @@ import { DesignStrip } from "@/components/site/DesignStrip";
 export const metadata: Metadata = {
   title: "Seat Maker — Drag-and-Drop Seating Chart App for iPhone & iPad",
   description:
-    "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline, no account required.",
+    "Plan wedding and event seating in minutes. Drag & drop tables, shuffle guests, lock VIPs, and share as message or image. Works offline, no account required.",
 };
 
 export default function HomePage() {
@@ -21,7 +21,7 @@ export default function HomePage() {
       { iconColor: "text-blue-600", title: "Custom Table Layouts", desc: "Round, rectangular, or square—resize and label.", href: "#how-it-works" },
       { iconColor: "text-blue-600", title: "Guest List Import", desc: "Add from Contacts or CSV in one step.", href: "#how-it-works" },
       { iconColor: "text-blue-600", title: "Shuffle & Lock VIPs", desc: "Explore options while keeping key seats fixed.", href: "#how-it-works" },
-      { iconColor: "text-blue-600", title: "QR Sharing & Export", desc: "Share instantly or export an image for your venue.", href: "#how-it-works" },
+      { iconColor: "text-blue-600", title: "Share as Message & Image", desc: "Send via Messages or save/export an image.", href: "#how-it-works" },
       { iconColor: "text-blue-600", title: "Offline & Private", desc: "Your data stays on device or iCloud if enabled.", href: "#how-it-works" },
     ],
     []
@@ -35,14 +35,14 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="space-y-7">
               <h1 className="text-[44px] leading-[1.05] sm:text-6xl font-extrabold tracking-tight">
-                <span className="block">Create Perfect</span>
-                <span className="block text-blue-600 dark:text-blue-500">Seating Arrangements</span>
+                <span className="block">Create Seating</span>
+                <span className="block text-blue-600 dark:text-blue-500">for Events</span>
               </h1>
               <p className="text-base sm:text-lg text-muted-foreground max-w-2xl">
-                Drag & drop tables, shuffle guests, lock VIPs, and share via QR. Works offline. No account required.
+                Drag & drop tables, shuffle guests, lock VIPs, and share as message or image. Works offline. No account required.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <AppStoreBadge />
+                <AppStoreBadge className="bg-blue-600 text-white hover:bg-blue-700 shadow-lg ring-1 ring-blue-700/40" />
                 <Link href="#how-it-works" className="inline-flex items-center justify-center rounded-xl border px-5 py-3 text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors">
                   Learn More
                 </Link>
@@ -58,7 +58,7 @@ export default function HomePage() {
                 alt="Seat Maker app preview"
                 width={480}
                 height={960}
-                className="rounded-2xl shadow-2xl mx-auto"
+                className="mx-auto"
                 priority
               />
             </div>
@@ -87,8 +87,8 @@ export default function HomePage() {
                     {idx === 3 && (/* Shuffle/Lock */
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h3l3 5 3-5h9"/><path d="M3 17h3l3-5 3 5h9"/></svg>
                     )}
-                    {idx === 4 && (/* Share/Export */
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8h16v-8"/><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/></svg>
+                    {idx === 4 && (/* Share as message & image */
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
                     )}
                     {idx === 5 && (/* Offline */
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 2l20 20"/></svg>
@@ -115,7 +115,7 @@ export default function HomePage() {
               {i:2, caption:"Build custom round, square, or rectangle tables"},
               {i:3, caption:"Shuffle results to explore options"},
               {i:4, caption:"Lock VIPs before shuffling"},
-              {i:5, caption:"Share with QR or export an image"},
+              {i:5, caption:"Share as message or image"},
             ].map(({i, caption}) => (
               <figure key={i} className="min-w-[280px] sm:min-w-[360px] snap-start will-change-transform hover:[transform:rotateX(6deg)_translateY(-2px)] transition-transform">
                 <Image src={`/images/seat${i}.png`} alt={`Seat Maker seating chart UI ${i}`} width={360} height={640} className="rounded-xl shadow-lg" />
@@ -136,7 +136,7 @@ export default function HomePage() {
               { step: 2, title: "Add guests", tip: "Import from Contacts or CSV.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3z"/><path d="M2 20c0-3.31 2.69-6 6-6h4"/></svg> },
               { step: 3, title: "Drag to seats", tip: "Group families to seat faster.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12h16"/><path d="M12 4v16"/></svg> },
               { step: 4, title: "Lock & shuffle", tip: "Fix VIPs, explore options.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> },
-              { step: 5, title: "Share", tip: "QR or image export for venues.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8h16v-8"/><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/></svg> },
+              { step: 5, title: "Share", tip: "Send as a message or export an image.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8h16v-8"/><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/></svg> },
             ].map((s) => (
               <div key={s.step} className="rounded-2xl p-6 shadow-sm border bg-background">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-6 w-6 items-center justify-center rounded bg-blue-100 text-blue-700">{s.step}</span>{s.icon}</div>
@@ -164,7 +164,7 @@ export default function HomePage() {
               {q:"Shuffle + lock VIPs saved us hours.", a:"Event host"},
               {q:"Perfect for corporate dinners.", a:"Corporate planner"},
               {q:"Offline mode worked great at the venue.", a:"Venue coordinator"},
-              {q:"Sharing via QR impressed everyone.", a:"Bride"},
+              {q:"Sharing via Messages impressed everyone.", a:"Bride"},
               {q:"Best seating app I’ve tried.", a:"Parent"},
               {q:"So fast for galas and fundraisers.", a:"Nonprofit"},
             ].map((r, i) => (
@@ -188,7 +188,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-3">Ready to build your seating plan?</h2>
           <p className="text-lg mb-8">Get Seat Maker on the App Store.</p>
-          <AppStoreBadge />
+          <AppStoreBadge className="bg-blue-600 text-white hover:bg-blue-700 shadow-lg ring-1 ring-blue-700/40" />
         </div>
       </section>
 
